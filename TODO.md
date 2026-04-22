@@ -48,10 +48,10 @@ If you aren't me, I've completed this :3
 | Pre-production use       | Usability, configurability, log files.      |       |
 | Pre-production use       | Registry key use                            |       |
 | Pre-production use       | Commandline use                             |       |
-| Prep for use in-prod     | Clear out files and old remains             |       |
+| Prep for use in-prod     | Clear out files and old remains             |   X   |
 | Prep for use in-prod     | Update documentation                        |       |
 | Prep for use in-prod     | Technical docs                              |       |
-| Prep for use in-prod     | Reset git log                               |       |
-| Prep for use in-prod     | Publish repository                          |       |
-| Prep for use in-prod     | Package archives and binaries               |       |
-| Prep for use in-prod     | Release and distribute                      |       |
+| Prep for use in-prod     | Reset git log                               |   X   |
+| Prep for use in-prod     | Publish repository                          |   X   |
+| Prep for use in-prod     | Package archives and binaries               |   X   |
+| Prep for use in-prod     | Release and distribute                      |   X   |
