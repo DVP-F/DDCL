@@ -1,0 +1,3 @@
+bin/*.exe
+dist/*
+source/conf*toml

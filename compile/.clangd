@@ -1,0 +1,7 @@
+CompileFlags:
+  Compiler: x86_64-w64-mingw32-g++
+  Add:
+  - -D_WIN32_WINNT=0x0A00
+  - -DWINVER=0x0A00
+  - --target=x86_64-w64-mingw32
+  - -std=c++17

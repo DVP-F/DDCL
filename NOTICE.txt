@@ -1,0 +1,11 @@
+DDCL v0.1.0
+===============
+
+This program is licensed under GPL-3.0-only.
+See LICENSES/LICENSE.gpl3 for full license.
+
+Dependency 'toml++' (https://github.com/marzer/tomlplusplus) is licensed under MIT. 
+See LICENSES/LICENSE.mit for full license.
+
+Source repository: https://github.com/DVP-F/DDCL
+Copyright (c) DVP-F/Carnx00
