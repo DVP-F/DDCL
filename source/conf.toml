@@ -1,0 +1,48 @@
+
+[Meta]
+# Location for logs. Overrides the default path prioritization. "\DDCL-Logs\" is appended. If unset, undefined, or empty, uses default.
+# Supports paths relative to the executable and absolute paths. Absolute paths must be prefixed with a drive letter (C:\).
+log_path = ""
+# Enable or disable the use of wincrap's virtual terminal processing for colored output.
+# Disabling this will make output unicolored and will fail proper alignment of output. Falls back to false if the terminal does not support it. (Older versions < W10)
+use_virtual_terminal = true
+# Which checks to perform. Overrides any config below. Ordering is irrelevant.
+detections = [
+    "Internet",
+    "Ethernet",
+    "DNS resolution",
+    "VPN",
+    "Disks",
+    "UNC",
+]
+
+[Network]
+# network checks are performed with a timeout of 600ms in the unmodified source code - beware of latency
+# check is the ip (or hostname) used to verify if an internet connection is present
+check = "1.1.1.1"
+# optional dns override (outside of the lan prefferable). DNS resolution attempts resolving `www.wikipedia.org` and [check]
+# defaults to system NS config (of whatever network is active). may therefore time out
+dns = ""
+# expected domain (Ethernet DNS Suffix) is optional, just used to check if the network domain is or is not as expected. used if you have a domain :)
+expected_domain = ""
+# expected VPN hostname is optional and does not affect normal function. the app might not be able to get the hostname
+# case-insensitive regex match in ECMAScript syntax - double backslashes, no need for /regex/ delimiting, and dont use ^$ flags
+expected_vpn_hostname = ""
+
+[Disks]
+# mounted disks with drive letters; Local direct-attached storage or SAN storage, not network shares.
+locals = [
+	"C",
+]
+# unc paths are network resources to check eg. smb shares etc. (Including NAS storage) 
+# quad backslashes per single backslash in the final path due to parsing by C++ string literal and toml parser.
+unc = [
+	# define as high importance by prefixing UNC paths with `#!`
+	# localhosts can be used to test the virtual loopback adapter too - if the path is a shared folder or otherwise available. 
+	"#!\\\\localhost\\C",
+	# add `$username` to use the current user's username in a path, for example to check the user's home directory 
+	#  !!  (UNC only; intended for AD/AAD where a home folder is set up on a file server)  !!
+	# obligatory reminder that this is string expansion, not parametrized queries. ensure the envvar %USERNAME% is safe.
+	"\\\\localhost\\Users\\$username",
+	# this kind of path (C:\Users\*) is natively language-agnostic - `Users` points the same place no matter the syslocale.
+]
