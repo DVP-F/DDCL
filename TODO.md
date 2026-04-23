@@ -17,13 +17,7 @@
         -> Registry key use  
         -> Commandline use  
 4. Prep for use in-prod  
-    -> Clear out files and old remains  
     -> Update documentation and make techincal docs  
-    -> Reset git log  
-    -> Publish repository  
-    -> Package archives and binaries - release and distribute  
-
-If you aren't me, I've completed this :3  
 
 ## Table and checklist  
 
