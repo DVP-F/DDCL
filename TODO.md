@@ -5,8 +5,7 @@
 1. Human review and read-through of DDCL.cpp  
     -> See if it's fairly understandable (semantic logic)  
 2. Update scripts  
-   -> `compile.sh`  
-    - maybe `.clangd`  
+   -> `compile.sh` - maybe `.clangd`  
 3. Testing  
     - DDCL.exe  
         -> Full use test, endurance, commandline arguments  
@@ -18,6 +17,8 @@
         -> Commandline use  
 4. Prep for use in-prod  
     -> Update documentation and make techincal docs  
+5. Remake installer.py in C or Rust  
+   -> Minimize size in deployment (currently 7MB)  
 
 ## Table and checklist  
 
@@ -49,3 +50,4 @@
 | Prep for use in-prod     | Publish repository                          |   X   |
 | Prep for use in-prod     | Package archives and binaries               |   X   |
 | Prep for use in-prod     | Release and distribute                      |   X   |
+| Rewrite `installer.py`   | Rust, C, Zig?                               |       |
