@@ -220,6 +220,9 @@ The second part defines standard escape codes which are used in everything that 
 
 ## Function descriptions  
 
+I'm removing the default argument values so this is easier to read.  
+Details and defaults should be checked directly within the code.  
+
 ### `bool can_write_file_dir(const std::filesystem::path& dirPath)`
 
 Checks if a directory is writable by creating and immediately deleting a temporary test file "write_test.tmp" inside it.
@@ -252,21 +255,27 @@ Prints message and sleeps to let the user know to edit before exit.
 
 ### `std::optional<VpnConnection> find_vpn_by_interface_name()`
 
-Scans network adapters via `GetAdaptersAddresses()` for active ("Up") interfaces with "vpn" in name/description (case-insensitive, skips loopback).
+Enumerates all network adapters using `GetAdaptersAddresses()` and selects active, non-loopback interfaces that *look like VPNs* based on interface type (PPP, IKEv2) or adapter name hints (e.g. "Ras", "VPN", "tun", "tap").
 
-Extracts first IPv4 from unicast addresses; falls back hostname to DNS suffix, description, or "VPN_Interface".
+For the first matching adapter, extracts the first available IPv4 address from its unicast list.
+
+Returns the first valid VPN-like interface found, or `std::nullopt` if none match.
 
 ### `std::optional<VpnConnection> get_active_vpn()`
 
-Detects active VPN connections via `RasEnumConnectionsA` (legacy RAS), then interface scan for IKEv2/SSTP/etc. (PPP type 131, "RasSstp", etc.).
+Attempts to detect an active VPN connection using a layered strategy:
 
-Fills `VpnConnection{name, hostname, local_ip}` from RAS entry/device fields or adapter details; chains to `find_vpn_by_interface_name()` as fallback.
+1. **Primary:** Calls `find_vpn_by_interface_name()` and returns immediately if a valid VPN interface is found.
+2. **Secondary (RAS):** Uses `RasEnumConnectionsA` and `RasGetConnectStatusA` to query legacy RAS connections. If a connected session is found, fills `VpnConnection` using entry name and device name (only if non-empty).
+3. **Fallback:** Performs a secondary adapter scan targeting VPN-specific interface types and adapter name patterns (e.g. PPP, IKEv2, "RasSstp", "AgileVPN"). Extracts IPv4 and derives hostname from DNS suffix or description.
+
+Returns the first valid result from these methods, or `std::nullopt` if no active VPN can be identified.
 
 ### `bool EnableVirtualTerminal()`
 
 Enables ANSI/VT100 escape sequences and UTF-8 in console via `SetConsoleMode(ENABLE_VIRTUAL_TERMINAL_PROCESSING)` and codepage settings.
 
-Fails gracefully on old Windows (<Win10); used for colored output.
+Fails gracefully on old Windows (\<10); used for colored output. ANSI codes are used no regardless :3
 
 ### `std::string get_timestamp()`
 
@@ -387,5 +396,11 @@ Used for `--config` flag; shows UNC importance colors.
 Parses command line arguments (`--config`, `-c`) and sets up program execution flow.
 
 Either prints config summary and exits (config flag), ensures default config and exits (no config), or enters main monitoring loop with `initialize_runtime()`, initial status write, and 1-second timed `update_status()` + `status_check()` cycles; handles console Ctrl+C cleanup.
+
+1-second timing is performed by subtracting the time spent on gathering data and printing it from a 1-second `std::chrono::duration<long long>` and clamping the result between 0 and 1 seconds, as follows.  
+
+```cpp
+std::this_thread::sleep_for(max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - min(std::chrono::seconds{ 1 }, time_end - loop_start)));
+```
 
 Handles Windows console setup (VT/UTF-8), config validation, logging initialization, and graceful shutdown with status preservation.

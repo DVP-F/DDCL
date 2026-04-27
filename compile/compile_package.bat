@@ -42,7 +42,7 @@ set  LINK_PATH="C:\Program Files\Microsoft Visual Studio\...\link.exe"
 set   WIX_PATH="C:\Program Files\WiX Toolset v7.0\bin\wix.exe"
 REM GUIDs for MSI package
 REM __,,..-----'''¨¨¨¨ FORCEFIELD DO NOT TOUCH ¨¨¨¨'''-----..,,__
-set "MSIPKG_ID=DDCL_MSI_INSTALLER_ref_%company_short_name%"
+set "MSIPKG_ID=DDCL_MSI_INSTALLER_ref_%company_short_name%" || REM Legal ID for the MSI
 set GUID_STABLE_UPGRADE=eec3969e-9ee5-4635-916d-01c318c849e7
 set GUID_STABLE_RUNNER=5276fcd8-b925-4fb5-a886-cadbcd3f6cfe
 set GUID_STABLE_INSTALLER=217bf05d-2d4a-41fa-92a6-10e1198fefc9
@@ -51,6 +51,8 @@ set GUID_STABLE_NOTICE=07f52426-4afa-4a18-80e8-8c1a44a41d30
 set GUID_STABLE_LICENSE_GPL=35a50009-d180-4cf8-a3a1-32580f37309c
 set GUID_STABLE_LICENSE_MIT=4a5cb89b-2a11-477e-94a7-438ac326b5ca
 REM ¨¨´'**-----,,,____ FORCEFIELD DO NOT TOUCH ____,,,-----**'`¨¨
+REM Product verion GUID. Change every new version
+set GUID_PRODUCT_CODE=6ff5a40b-a57b-4fb9-86ff-742b570bb6db
 
 REM You can install VS, Python, and WiX from here:
 REM https://visualstudio.microsoft.com/downloads/	// At least 2022 edition, with C++ workload
@@ -132,7 +134,7 @@ REM Write the WiX source file
 	echo ^<?xml version="1.0" encoding="UTF-8"?^>
 	echo ^<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"^>
 	echo   ^<Package Id="%MSIPKG_ID%" Name="%runner_name%" Language="1033" Version="%version%" Manufacturer="%company_name%" UpgradeCode="%GUID_STABLE_UPGRADE%" InstallerVersion="500" Compressed="yes" Scope="perMachine"^>
-	echo     ^<MajorUpgrade DowngradeErrorMessage="A newer version of %runner_name% is already installed." /^>
+	echo     ^<MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes" AllowDowngrades="no" DowngradeErrorMessage="A newer version of %runner_name% is already installed." /^>
 	echo     ^<MediaTemplate EmbedCab="yes" /^>
     echo     ^<StandardDirectory Id="ProgramFiles6432Folder"^>
     echo       ^<Directory Id="INSTALLFOLDER" Name="%runner_name%" /^>

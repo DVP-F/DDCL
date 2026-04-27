@@ -16,7 +16,7 @@ It's also one of __very__ few C++ application in my career, so dont mind the bad
     - [Scripts and Source code](#scripts-and-source-code)  
     - [Licenses](#licenses)  
     - [Other](#other-files)  
-  - [How2](#how-to-use)  
+  - [How To](#how-to-use)  
     - [Installation Packages](#installation-packages)  
       - [Compilation](#compilation)  
       - [Recommended Environment](#recommended-environment)  
@@ -27,6 +27,7 @@ It's also one of __very__ few C++ application in my career, so dont mind the bad
       - [Standalone](#standalone-set-ddcl_standalonezip)  
     - [Standalone EXE](#standalone-executable-use)  
     - [Full Install](#full-install)  
+    - [Running the app](#running)
     - [Logging](#logging)  
       - [Log Format](#log-format)  
     - [Commandline](#commandline-options-for-ddclexe)  
@@ -182,6 +183,9 @@ Each additionally contains License and Copyright notices by way of these files:
 - [./LICENSES/LICENSE.mit](./LICENSES/LICENSE.mit)  
 - [./NOTICE.txt](./NOTICE.txt)  
 
+__NOTE!__ The binaries are NOT static-linked and is therefore __NOT portable__!  
+They depend on the host machine to supply any otherwise missing libraries!
+
 #### Full set (`DDCL_full.zip`)  
 
 Contains the following:  
@@ -233,7 +237,17 @@ Contains the following:
    1. Run `DDCL-Setup.msi`  
    The MSI should copy the files into either `C:\Program Files\DDCL` or `C:\Program Files (x86)\DDCL`  
    \- and run `DDCL_Installer.exe`.
-3. This should register the install location on %PATH%, so you can call DDCL merely by name in any terminal.
+
+### Running  
+
+Depending on how you install DDCL, you have a few options for executing it.  
+Refer to the beneath table for applicable methods of execution by installation method :)  
+
+| Execution method | Standalone EXE  | Installation script | MSI | Installer binary  |
+|:-----------------|:---------------:|:-------------------:|:---:|:-----------------:|
+| From directory   |        X        |          X          |  X  |         X         |
+| Command (`ddcl`) |                 |          X          |  X  |         X         |
+| Start menu       |                 |          X          |  X  |         X         |
 
 ### Logging  
 
@@ -260,16 +274,17 @@ The log is in CSV format (comma delimited ","), with the following columns:
 - `value`: The value of the log entry, self descriptive.  
 - `info`: Any additional information about the log entry.  
 
-Example:  
+Example of the initial status write:  
 
 ```csv
 timestamp,kind,value,info
-01.04.2032-13:47:40,internet_connectivity,online
-01.04.2032-13:47:40,ethernet,Ethernet 8;example.domain.tld,initial_status
-01.04.2032-13:47:40,dns_resolution,1.1.1.1:sys_dns;True 1.1.1.1:{given_dns};True www.wikipedia.org:sys_dns;False www.wikipedia.org:{given_dns};True
-01.04.2032-13:47:40,vpn_connection,not_connected l_ip:N/A
-01.04.2032-13:47:40,drive_availability,available,C
-01.04.2032-13:47:40,unc_availability,available,\\redacted_path\somewhere
+27.04.2026-11:34:26,registered_detections,internet_connectivity;ethernet;dns_resolution;vpn_connection;drive_availability;unc_availability,initial_status
+27.04.2026-11:34:26,internet_connectivity,online
+27.04.2026-11:34:26,ethernet,Ethernet 16;exampledomain.net,dns_suffix_changed;(N/A:exampledomain.net)
+27.04.2026-11:34:26,dns_resolution,1.1.1.1:sys_dns;True 1.1.1.1:ns1.altibox.net;True www.wikipedia.org:sys_dns;False www.wikipedia.org:ns1.altibox.net;True
+27.04.2026-11:34:26,vpn_connection,not_connected l_ip:N/A
+27.04.2026-11:34:26,drive_availability,available,C
+27.04.2026-11:34:26,unc_availability,available,\\path\going\somewhere
 ```
 
 ### Commandline options for DDCL.exe  
