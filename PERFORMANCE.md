@@ -18,7 +18,8 @@ Intel Iris Xe Integrated Graphics
 
 Testing occurred over one weekend. Program was started and left running in the background.  
 Total time: ~68 hours  
-Active time: ~6 hours
+Active time: ~6 hours  
+App version: 0.1.0  
 
 One measurement was taken at the end of this time, before a restart to capture the initial state.  
 Both measurement were taken using Process Hacker.  
@@ -30,7 +31,7 @@ Both measurement were taken using Process Hacker.
 The most noticable change is an increased memory usage - however this is not a significant change at this time and should be tested further before any conclusions are drawn.  
 Also of note is a stable low CPU usage and generally low I/O and Memory usage.  
 
-Looking at the log (8,72kB in this case); It has indeed not been running while the device was sleeping. a sharp cut appears from 24.04.2026 to 27.04.2026 - quite as expected.  
+Looking at the log (8,72kB in this case); It has indeed not been running while the device was sleeping. A sharp cut appears from 24.04.2026 to 27.04.2026 - quite as expected.  
 Regardless of the exceedingly expected limitations of OS inactivity, the cature seems accurate for all events occurring within the given timeframe, including detecting that the device was reactivated (in a sudden logging spree from the sudden change)  
 
 Interestingly enough, it reveals when the applicable fileshares go offline, as a network disturbance seems to have occurred before the device initiated sleep.  

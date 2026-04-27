@@ -6,29 +6,30 @@ It's also one of __very__ few C++ application in my career, so dont mind the bad
 
 ## ToC  
 
-- [Header](#ddcl---diskdriveconnectionlogger)
-  - [Credits](#credits)
-    - [Toml++](#toml---a-c17-library-for-toml-parsing-and-serialization)
-    - [Everything else](#everything-else)
-  - [Files](#files)
-    - [Binaries](#binaries)
-    - [Scripts and Source code](#scripts-and-source-code)
-    - [Licenses](#licenses)
-    - [Other](#other-files)
-  - [How2](#how-to-use)
-    - [Installation Packages](#installation-packages)
-      - [Compilation](#compilation)
-      - [Recommended Environment](#recommended-environment)
-      - [Requirements for Installation](#requirements-for-installation)
-    - [Archive Sets](#archive-sets)
-      - [Full](#full-set-ddcl_fullzip)
-      - [Manual](#manual-set-ddcl_manualzip)
-      - [Standalone](#standalone-set-ddcl_standalonezip)
-    - [Standalone EXE](#standalone-executable-use)
-    - [Full Install](#full-install)
-    - [Logging](#logging)
-      - [Log Format](#log-format)
-    - [Commandline](#commandline-options-for-ddclexe)
+- [Header](#ddcl---diskdriveconnectionlogger)  
+  - [Credits](#credits)  
+    - [Toml++](#toml---a-c17-library-for-toml-parsing-and-serialization)  
+    - [Everything else](#everything-else)  
+  - [Performance and statistics](#performance-and-statistics)  
+  - [Files](#files)  
+    - [Binaries](#binaries)  
+    - [Scripts and Source code](#scripts-and-source-code)  
+    - [Licenses](#licenses)  
+    - [Other](#other-files)  
+  - [How2](#how-to-use)  
+    - [Installation Packages](#installation-packages)  
+      - [Compilation](#compilation)  
+      - [Recommended Environment](#recommended-environment)  
+      - [Requirements for Installation](#requirements-for-installation)  
+    - [Archive Sets](#archive-sets)  
+      - [Full](#full-set-ddcl_fullzip)  
+      - [Manual](#manual-set-ddcl_manualzip)  
+      - [Standalone](#standalone-set-ddcl_standalonezip)  
+    - [Standalone EXE](#standalone-executable-use)  
+    - [Full Install](#full-install)  
+    - [Logging](#logging)  
+      - [Log Format](#log-format)  
+    - [Commandline](#commandline-options-for-ddclexe)  
 
 ## Credits  
 
@@ -47,6 +48,11 @@ Links to hosts:
 [Github](https://github.com/DVP-F/DDCL)  
 Copyright: Copyright (c) DVP-F/Carnx00 2026 <carnx@duck.com>  
 License: `LICENSES/LICENSE.gpl3` [(GPL-3.0)](https://www.gnu.org/licenses/gpl-3.0.html)  
+
+## Performance and statistics  
+
+Test results can be found in [PERFORMANCE.md](./PERFORMANCE.md)  
+Statistics i have yet to produce.  
 
 ## Files  
 
