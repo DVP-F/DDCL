@@ -258,29 +258,37 @@ static std::optional<VpnConnection> find_vpn_by_interface_name() {
 		return std::nullopt;
 	}
 	for (auto p = addrs; p != nullptr; p = p->Next) {
-		std::string nameUtf8 = wstring_to_utf8_string(p->FriendlyName);
-		std::string descUtf8 = wstring_to_utf8_string(p->Description);
-		std::string hostUtf8 = (p->DnsSuffix != nullptr) ? wstring_to_utf8_string(p->DnsSuffix) : "";
-		std::string nameLower = nameUtf8;
-		std::transform(nameLower.begin(), nameLower.end(), nameLower.begin(), ::tolower);
-		std::string descLower = descUtf8;
-		std::transform(descLower.begin(), descLower.end(), descLower.begin(), ::tolower);
 		if (p->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue; // explicitly skip loopback interfaces
-		if ((nameLower.find("vpn") != std::string::npos ||
-			descLower.find("vpn") != std::string::npos) &&
-			p->OperStatus == IfOperStatusUp) {
-			// Get first IPv4
-			PIP_ADAPTER_UNICAST_ADDRESS ua = p->FirstUnicastAddress;
-			if (ua && ua->Address.lpSockaddr->sa_family == AF_INET) {
+		if (p->OperStatus != IfOperStatusUp) continue;
+		std::string nameUtf8 = p->FriendlyName ? wstring_to_utf8_string(p->FriendlyName) : "";
+		std::string descUtf8 = p->Description ? wstring_to_utf8_string(p->Description) : "";
+		std::string hostUtf8 = (p->DnsSuffix != nullptr) ? wstring_to_utf8_string(p->DnsSuffix) : "";
+		// Detect "VPN-ish" adapters via type instead of fragile string matching
+		bool looksLikeVpn =
+			p->IfType == IF_TYPE_PPP ||       // PPP
+			p->IfType == 131 ||               // IKEv2
+			strstr(p->AdapterName, "Ras") ||
+			strstr(p->AdapterName, "VPN") ||
+			strstr(p->AdapterName, "tun") ||
+			strstr(p->AdapterName, "tap");
+		if (!looksLikeVpn) continue;
+		// Get first valid IPv4
+		for (auto ua = p->FirstUnicastAddress; ua; ua = ua->Next) {
+			if (ua->Address.lpSockaddr &&
+				ua->Address.lpSockaddr->sa_family == AF_INET) {
 				sockaddr_in* ip = reinterpret_cast<sockaddr_in*>(ua->Address.lpSockaddr);
-				char ipStr[INET_ADDRSTRLEN];
-				inet_ntop(AF_INET, &ip->sin_addr, ipStr, sizeof(ipStr));
+				char ipStr[INET_ADDRSTRLEN] = {};
+				if (!inet_ntop(AF_INET, &ip->sin_addr, ipStr, sizeof(ipStr)))
+					continue;
 				VpnConnection vpn;
 				vpn.connected = true;
-				vpn.name = nameUtf8.empty() ? p->AdapterName : nameUtf8;
-				if      (!hostUtf8.empty()) { vpn.hostname = hostUtf8; }
-				else if (!descUtf8.empty()) { vpn.hostname = descUtf8; }
-				else                        { vpn.hostname = "VPN_Interface"; }
+				// Name
+				vpn.name = !nameUtf8.empty() ? nameUtf8 : p->AdapterName;
+				// Hostname (THIS is the important bit)
+				if      (!hostUtf8.empty()) vpn.hostname = hostUtf8;   // <- real server (when available)
+				else if (!descUtf8.empty()) vpn.hostname = descUtf8;
+				else if (!nameUtf8.empty()) vpn.hostname = nameUtf8;
+				else                        vpn.hostname = "VPN_Interface";
 				vpn.local_ip = ipStr;
 				return vpn;
 			}
@@ -290,112 +298,81 @@ static std::optional<VpnConnection> find_vpn_by_interface_name() {
 }
 
 static std::optional<VpnConnection> get_active_vpn() {
+	// FIRST: try interface scan
+	auto vpn = find_vpn_by_interface_name();
+	if (vpn != std::nullopt) return vpn;
 	DWORD dwConnections = 0; DWORD dwSize = 0;
-	// First call to get required buffer size
 	DWORD firstResult = RasEnumConnectionsA(NULL, &dwSize, &dwConnections);
 	// ignore errors. we ball. 
-	// Allocate buffer and set dwSize for first struct
 	std::vector<BYTE> buffer(dwSize);
 	auto* connections = reinterpret_cast<RASCONNA*>(buffer.data());
 	if (connections != nullptr && dwSize >= sizeof(RASCONNA)) {
 		connections[0].dwSize = sizeof(RASCONNA);  // REQUIRED!
-		// Second call to actually enumerate
 		DWORD actualCount = 0;
 		DWORD result = RasEnumConnectionsA(connections, &dwSize, &actualCount);
-		if (result == 0) {
+		if (result == 0 && actualCount > 0) {
 			HRASCONN hRasConn = connections[0].hrasconn;
-			// Get connection status
 			RASCONNSTATUSA status;
 			status.dwSize = sizeof(RASCONNSTATUS);
-			DWORD cbStatus = sizeof(status);
-			if (RasGetConnectStatusA(hRasConn, &status) <= 0) { // check for specific problems instead of exiting
+			if (RasGetConnectStatusA(hRasConn, &status) <= 0) {
 				if (status.rasconnstate <= RASCS_Connected) {
-					// Get entry name - USE RasGetEntryProperties directly
-					char entryName[256] = { 0 };
-					DWORD entrySize = sizeof(entryName);
-					// First enum entries to find matching name
-					DWORD dwEntries = 0, dwEntrySize = 0;
-					RasEnumEntriesA(NULL, NULL, NULL, &dwEntrySize, &dwEntries);
-					std::vector<RASENTRYNAMEA> entries(dwEntrySize / sizeof(RASENTRYNAMEA));
-					RasEnumEntriesA(NULL, NULL, entries.data(), &dwEntrySize, &dwEntries);
-					for (DWORD i = 0; i < dwEntries; i++) {
-						RASENTRYA entry;
-						entry.dwSize = sizeof(RASENTRYA);
-						if (RasGetEntryPropertiesA(NULL, entries[i].szEntryName, &entry, &entry.dwSize, NULL, NULL) == 0) {
-							VpnConnection vpn;
-							vpn.connected = true;
-							vpn.name = entries[i].szEntryName;
-							// TRY these fields for hostname (ProtonVPN puts it here):
-							vpn.hostname = entry.szLocalPhoneNumber;  // Often hostname
-							if (vpn.hostname.empty() || vpn.hostname == "0") {
-								vpn.hostname = entry.szDeviceName;     // Fallback
-							}
-							// IP from status
-							vpn.local_ip = status.szPhoneNumber; // IP is often held in phonenumber field for some reason
-							return vpn;
-						}
+					VpnConnection vpn;
+					vpn.connected = true;
+					// These fields are often garbage — only use if non-empty
+					if (connections[0].szEntryName[0] != '\0')
+						vpn.name = connections[0].szEntryName;
+					if (status.szDeviceName[0] != '\0')
+						vpn.hostname = status.szDeviceName;
+					// If both are still empty → bail (don't return junk)
+					if (vpn.name.empty() && vpn.hostname.empty()) {
+						// fall through to nullopt
+					} else {
+						return vpn;
 					}
 				}
 			}
 		}
 	}
-	// NOW check network interfaces for IKEv2 VPNs (RasSstp, AgileVPN, etc.)
-	// This wont be fun to make a technical description for.
-	// The walk goes through RAS detections and ends up walking network interfaces bruh
-	//// And stupidly enough its needed for some VPNs. I know one thats PPP/IKEv2, Intune managed as a WAN Miniport.
-	//// Cannot find it any other way, and i dont know any way to get the hostname field, thus support for regex 
-	//// (since the hostname get falls back to desc/name, you can match that instead.)
+	// LAST fallback
 	ULONG bufSize = 0;
 	GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_DNS_SERVER, NULL, NULL, &bufSize);
 	PIP_ADAPTER_ADDRESSES pAddrs = (PIP_ADAPTER_ADDRESSES)malloc(bufSize);
 	if (GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_ALL_INTERFACES | GAA_FLAG_SKIP_DNS_SERVER, NULL, pAddrs, &bufSize) == NO_ERROR) {
 		for (PIP_ADAPTER_ADDRESSES p = pAddrs; p; p = p->Next) {
-			// Check for active VPN interface types 
 			if (p->IfType == IF_TYPE_SOFTWARE_LOOPBACK) continue;
-			// skip loopback interfaces - some VPNs use loopback type but we want to avoid normal loopback adapters 
-			// id rather the other checks detect the loopback vpns through other means 
 			if (p->OperStatus == IfOperStatusUp && (
-				p->IfType == IF_TYPE_PPP ||                    // PPP (traditional VPN)
-				//p->IfType == IF_TYPE_SOFTWARE_LOOPBACK ||      // RasMan virtual //! detects normal loopback adapters too
-				p->IfType == 131 ||                            // IF_TYPE_IKEV2_CORRELATOR
-				strstr(p->AdapterName, "RasSstp") ||           // SSTP
-				strstr(p->AdapterName, "AgileVPN") ||          // IKEv2
-				strstr(p->AdapterName, "wanarp") ||            // WAN ARP miniport
-				strstr(p->AdapterName, "RasAgileVpn")          // IKEv2 miniport
-				)) {
-				// Get first IPv4 address
-				PIP_ADAPTER_UNICAST_ADDRESS pUnicast = p->FirstUnicastAddress;
-				if (pUnicast) {
-					sockaddr_in* ip = (sockaddr_in*)pUnicast->Address.lpSockaddr;
-					char ipStr[INET_ADDRSTRLEN];
-					inet_ntop(AF_INET, &ip->sin_addr, ipStr, sizeof(ipStr));
-					VpnConnection vpn;
-					vpn.connected = true;
-					vpn.name = p->FriendlyName ? wstring_to_utf8_string(p->FriendlyName) : p->AdapterName;
-					vpn.local_ip = ipStr;
-					// Try to get hostname from description or name
-					vpn.hostname = p->Description ? wstring_to_utf8_string(p->Description) : "IKEv2_VPN";
-					// Clean up hostname - often contains server info
-					if (vpn.hostname.find("Proton") != std::string::npos ||
-						vpn.hostname.find("nlfree") != std::string::npos ||
-						vpn.hostname.find("VPN") != std::string::npos) {
-						// Keep as-is, likely contains server info
+				p->IfType == IF_TYPE_PPP ||
+				p->IfType == 131 ||
+				strstr(p->AdapterName, "RasSstp") ||
+				strstr(p->AdapterName, "AgileVPN") ||
+				strstr(p->AdapterName, "wanarp") ||
+				strstr(p->AdapterName, "RasAgileVpn")
+			)) {
+				for (auto ua = p->FirstUnicastAddress; ua; ua = ua->Next) {
+					if (ua->Address.lpSockaddr &&
+						ua->Address.lpSockaddr->sa_family == AF_INET) {
+						sockaddr_in* ip = (sockaddr_in*)ua->Address.lpSockaddr;
+						char ipStr[INET_ADDRSTRLEN] = {};
+						if (!inet_ntop(AF_INET, &ip->sin_addr, ipStr, sizeof(ipStr)))
+							continue;
+						VpnConnection vpn;
+						vpn.connected = true;
+						vpn.name = p->FriendlyName ? wstring_to_utf8_string(p->FriendlyName) : p->AdapterName;
+						vpn.local_ip = ipStr;
+						std::string desc = p->Description ? wstring_to_utf8_string(p->Description) : "";
+						std::string suffix = p->DnsSuffix ? wstring_to_utf8_string(p->DnsSuffix) : "";
+						if      (!suffix.empty()) vpn.hostname = suffix;
+						else if (!desc.empty())   vpn.hostname = desc;
+						else                      vpn.hostname = "IKEv2_VPN";
+						free(pAddrs);
+						return vpn;
 					}
-					free(pAddrs);
-					pAddrs = NULL;
-					return vpn;
 				}
 			}
 		}
 	}
-	if (pAddrs != NULL) {
-		free(pAddrs);
-		pAddrs = NULL;
-	}
-	// Then fallback to interface scan
-	auto vpn = find_vpn_by_interface_name();
-	if (vpn != std::nullopt) return vpn;
-	return std::nullopt; // or fail, in which case theres probably no VPN online. (the other checks shouldve caught 99%+ of VPNs)
+	if (pAddrs) free(pAddrs);
+	return std::nullopt;
 }
 
 // Enable Virtual Terminal Processing + UTF-8
