@@ -52,8 +52,10 @@ License: `LICENSES/LICENSE.gpl3` [(GPL-3.0)](https://www.gnu.org/licenses/gpl-3.
 
 ## Performance and statistics  
 
-Test results can be found in [PERFORMANCE.md](./PERFORMANCE.md)  
+Test results can be found in [docs/data/PERFORMANCE.md](./docs/data/PERFORMANCE.md)  
 Statistics i have yet to produce.  
+
+The data files will also be under [docs/data/](./docs/data/).
 
 ## Files  
 
@@ -103,7 +105,11 @@ Assuming default names.
   - [NOTICE.txt](./NOTICE.txt)
     - License and copyright notice  
     - Source repository  
-- [./docs/](./docs/) - Technical documentation  
+- [./docs/](./docs/) - Documentation  
+  - [/data/](./docs/data/) - Data sets  
+    - [PERFORMANCE.md](./docs/data/PERFORMANCE.md)  
+      - Documentation of performed tests  
+    - Various other data  
   - [compile_package.bat.md](./docs/compile_package.bat.md)  
     - Technical documentation of [compile_package.bat](./compile/compile_package.bat)  
   - [DDCL.cpp.md](./docs/DDCL.cpp.md)  
