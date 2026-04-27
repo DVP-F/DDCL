@@ -1,4 +1,4 @@
-DDCL v0.1.0
+DDCL v0.1.1
 ===============
 
 This program is licensed under GPL-3.0-only.

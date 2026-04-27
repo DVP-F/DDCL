@@ -16,8 +16,8 @@ set archive_failure=0
 
 REM Define the metadata
 REM Versions have to be four numbers
-set            version=0.1.0.0
-set      version_comma=0,1,0,0
+set            version=0.1.1.0
+set      version_comma=0,1,1,0
 set       company_name=CHANGEME
 set company_short_name=CHANGEME || REM Should match ^[a-zA-Z_]+$, used in legal id of the msi package.
 set        runner_name=DDCL
