@@ -8,8 +8,8 @@
    -> `compile.sh` - maybe `.clangd`  
 3. Testing  
     - DDCL.exe  
-        -> Full use test, endurance, commandline arguments  
-        -> Hardware tests - timing, stability, ram and cpu use  
+        -> Full use test  
+        -> Hardware tests - stability  
     - Pre-production use  
         -> Test viability with active consumer use  
         -> Usability, configurability, looking up the log files.  
@@ -31,11 +31,11 @@
 | Human review of DDCL.cpp | Semantic logic                              |Delayed|
 | Update scripts           | Based on installer.py / compile_package.bat |       |
 | Testing DDCL.exe         | Full use test                               |       |
-| Testing DDCL.exe         | Endurance                                   |       |
-| Testing DDCL.exe         | Commandline arguments                       |       |
-| Hardware tests           | Timing of updates                           |       |
+| Testing DDCL.exe         | Endurance                                   |   X   |
+| Testing DDCL.exe         | Commandline arguments                       |   X   |
+| Hardware tests           | Timing of updates                           |   X   |
 | Hardware tests           | Stability                                   |       |
-| Hardware tests           | RAM and CPU use                             |       |
+| Hardware tests           | RAM and CPU use                             |   X   |
 | Installers               | Write to correct location (MSI)             |   X   |
 | Installers               | Test registry key writes and %PATH% update  |   X   |
 | Installers               | Check .lnk write                            |   X   |
