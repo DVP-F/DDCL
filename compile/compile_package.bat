@@ -1,5 +1,6 @@
 
 @echo off
+setlocal
 REM Copyright (c) DVP-F/Carnx00 2026 <carnx@duck.com>
 REM License : GNU GPL 3.0 (https://www.gnu.org/licenses/gpl-3.0.html) supplied with the package `LICENSE.txt`
 REM Source code hosts:
@@ -40,10 +41,12 @@ set    VC_VARS=C:\Program Files\Microsoft Visual Studio\...\vcvarsall.bat
 set    RC_PATH="C:\Program Files (x86)\Windows Kits\...\rc.exe"
 set  LINK_PATH="C:\Program Files\Microsoft Visual Studio\...\link.exe"
 set   WIX_PATH="C:\Program Files\WiX Toolset v7.0\bin\wix.exe"
-REM GUIDs for MSI package
+REM IDs for MSI package
 REM __,,..-----'''¨¨¨¨ FORCEFIELD DO NOT TOUCH ¨¨¨¨'''-----..,,__
 set "MSIPKG_ID=DDCL_MSI_INSTALLER_ref_%company_short_name%" || REM Legal ID for the MSI
-set GUID_STABLE_UPGRADE=eec3969e-9ee5-4635-916d-01c318c849e7
+set GUID_STABLE_UPGRADE=eec3969e-9ee5-4635-916d-01c318c849e7 || 
+	REM Program family UUID. If equal to an already installed app, overwrites it with this app.
+REM Individual file components
 set GUID_STABLE_RUNNER=5276fcd8-b925-4fb5-a886-cadbcd3f6cfe
 set GUID_STABLE_INSTALLER=217bf05d-2d4a-41fa-92a6-10e1198fefc9
 set GUID_STABLE_CONFIG=52b45464-0d16-40ea-ba59-eb1212372bd7
@@ -94,6 +97,7 @@ REM Generate the runner's resource file (runner.rc)
 REM Set the environment vars for clang
 call "%VC_VARS%" x64
 
+
 REM Compile runner (DiskDriveConnectionLogger.cpp)
 REM This assumes you have VS installed and it supports compiling C++17
 %CLANG_PATH% /EHsc /std:c++17 /c ..\source\DDCL.cpp /Fo:"runner.obj"
@@ -116,9 +120,6 @@ if exist runner.rc (
 )
 if exist runner.res (
 	del runner.res
-)
-if exist runner.exe (
-	del runner.exe
 )
 
 REM Package into an MSI installer
@@ -218,3 +219,4 @@ if "%archive_failure%"=="1" (
 	echo Compression complete. Archives are located in "%output_dir%\".
 )
 cd "%start_dir%"
+endlocal
