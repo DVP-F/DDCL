@@ -1,8 +1,8 @@
-# compile_package.bat  
+# [compile_package.bat](../compile/compile_package.bat)  
 
 Compiling and packaging script.  
 By default uses Nuitka, CLang, RC, WiX, CLang Linker.  
-Wrapped in `setlocal`.  
+Wrapped in `setlocal`/`endlocal`.  
 
 Generates the following under [../dist/](../dist/):  
 

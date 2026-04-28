@@ -76,23 +76,27 @@ Assuming default names.
 
 ### Scripts and source code  
 
-- DDCL.cpp
-  - The main source, the actuall UI and logger.
-- toml.hpp
-  - The C++17 TOML parsing library used by DDCL.
-- compile_package.bat
-  - This is the primary compilation script, which handles python scripts and the runner,  
-    as well as MSI packaging.
-- installer.bat
-  - The secondary registration script - registers the runner binary `DDCL.exe`, registry keys, and %PATH%
-- compile.sh
-  - Compilation script for DDCL.exe when cross-compiling from Linux
+- [./source/](./source/)
+  - [DDCL.cpp](./source/DDCL.cpp)
+    - The main source, the actuall UI and logger.
+  - [toml.hpp](./source/toml.hpp)
+    - The C++17 TOML parsing library used by DDCL.
+  - [installer.py](./source/installer.py)
+    - The primary registration script - registers the runner binary `DDCL.exe`, registry keys, and %PATH%
+  - [installer.bat](./source/installer.bat)
+    - The secondary registration script - registers the runner binary `DDCL.exe`, registry keys, and %PATH%
+- [./compile/](./compile/)
+  - [compile_package.bat](./compile/compile_package.bat)
+    - This is the primary compilation script, which handles python scripts and the runner,  
+      as well as MSI packaging.
+  - [compile.sh](./compile/compile.sh)
+    - Compilation script for DDCL.exe when cross-compiling from Linux
 
-### Licenses  
+### [Licenses](./LICENSES/)  
 
-- LICENSE.gpl3
+- [LICENSE.gpl3](./LICENSES/LICENSE.gpl3)
   - This project's license - GPL-3.0
-- LICENSE.mit
+- [LICENSE.mit](./LICENSES/LICENSE.mit)
   - toml.hpp license - MIT
 
 ### Documents  
@@ -104,20 +108,20 @@ Assuming default names.
     - TODO list, changes to be made, plans.  
   - [NOTICE.txt](./NOTICE.txt)
     - License and copyright notice  
-    - Source repository  
+    - Source repository link  
 - [./docs/](./docs/) - Documentation  
   - [/data/](./docs/data/) - Data sets  
     - [PERFORMANCE.md](./docs/data/PERFORMANCE.md)  
       - Documentation of performed tests  
     - Various other data  
-  - [compile_package.bat.md](./docs/compile_package.bat.md)  
-    - Technical documentation of [compile_package.bat](./compile/compile_package.bat)  
   - [DDCL.cpp.md](./docs/DDCL.cpp.md)  
-    - Technical documentation of [DDCL.cpp](./source/DDCL.cpp)  
-  - [installer.bat.md](./docs/installer.bat.md)  
-    - Technical documentation of [installer.bat](./source/installer.bat)  
+    - Technical documentation of [DDCL.cpp](./source/DDCL.cpp) 
+  - [compile_package.bat.md](./docs/compile_package.bat.md)  
+    - Technical documentation of [compile_package.bat](./compile/compile_package.bat)   
   - [installer.py.md](./docs/installer.py.md)  
-    - Technical documentation of [installer.py](./source/installer.py)  
+    - Technical documentation of [installer.py](./source/installer.py) 
+  - [installer.bat.md](./docs/installer.bat.md)  
+    - Technical documentation of [installer.bat](./source/installer.bat)   
 
 ### Other files  
 
