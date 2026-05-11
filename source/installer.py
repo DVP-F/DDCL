@@ -43,7 +43,9 @@ def _find_installation_path() -> str|None:
 	except: pass
 
 def _init_registry_keys() -> None:
-	srun(r'reg add HKEY_LOCAL_MACHINE\SOFTWARE\DDCL /ve /reg:64 /t REG_SZ /d "" /f', shell=True) # Empty key
+	## Using /reg:64 to avoid errors and explicitly state that we expect a 64-bit device.
+	## No error handling bc this just has to work. if it doesnt it _IS_ a problem.
+	srun(r'reg add HKEY_LOCAL_MACHINE\SOFTWARE\DDCL /ve /reg:64 /t REG_SZ /d "" /f', shell=True) # Default empty key
 	# Prep install path value
 	srun(fr'reg add HKEY_LOCAL_MACHINE\SOFTWARE\DDCL /v InstallPath /reg:64 /t REG_SZ /d "{
 		install_path if install_path else ''}" /f', shell=True)

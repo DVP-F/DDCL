@@ -137,26 +137,26 @@ REM Write the WiX source file
 	echo   ^<Package Id="%MSIPKG_ID%" Name="%runner_name%" Language="1033" Version="%version%" Manufacturer="%company_name%" UpgradeCode="%GUID_STABLE_UPGRADE%" InstallerVersion="500" Compressed="yes" Scope="perMachine"^>
 	echo     ^<MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes" AllowDowngrades="no" DowngradeErrorMessage="A newer version of %runner_name% is already installed." /^>
 	echo     ^<MediaTemplate EmbedCab="yes" /^>
-    echo     ^<StandardDirectory Id="ProgramFiles6432Folder"^>
+    echo     ^<StandardDirectory Id="ProgramFiles6432Folder" ^>
     echo       ^<Directory Id="INSTALLFOLDER" Name="%runner_name%" /^>
     echo     ^</StandardDirectory^>
     echo     ^<DirectoryRef Id="INSTALLFOLDER"^>
     echo       ^<Directory Id="LicensesDir" Name="LICENSES" /^>
     echo     ^</DirectoryRef^>
-    echo       ^<Component Id="RunnerComponent" Guid="%GUID_STABLE_RUNNER%"^>
+    echo       ^<Component Id="RunnerComponent" Guid="%GUID_STABLE_RUNNER%" Directory="INSTALLFOLDER" ^>
     echo         ^<File Id="Runner" Name="%runner_bin_name%" Source="%runner_bin_name%" KeyPath="yes" /^>
     echo       ^</Component^>
-    echo       ^<Component Id="InstallerComponent" Guid="%GUID_STABLE_INSTALLER%"^>
+    echo       ^<Component Id="InstallerComponent" Guid="%GUID_STABLE_INSTALLER%" Directory="INSTALLFOLDER" ^>
     echo         ^<File Id="Installer" Name="%installer_bin_name%" Source="%installer_bin_name%" KeyPath="yes" /^>
     echo       ^</Component^>
-    echo       ^<Component Id="TomlComponent" Guid="%GUID_STABLE_CONFIG%"^>
+    echo       ^<Component Id="TomlComponent" Guid="%GUID_STABLE_CONFIG%" Directory="INSTALLFOLDER" ^>
     echo         ^<File Id="Config" Name="conf.toml" Source="../source/conf.toml" KeyPath="yes" /^>
     echo       ^</Component^>
-    echo       ^<Component Id="NoticeComponent" Guid="%GUID_STABLE_NOTICE%"^>
+    echo       ^<Component Id="NoticeComponent" Guid="%GUID_STABLE_NOTICE%" Directory="INSTALLFOLDER" ^>
     echo         ^<File Id="Notice" Name="NOTICE.txt" Source="../NOTICE.txt" KeyPath="yes" /^>
     echo       ^</Component^>
     echo        ^<ComponentGroup Id="LicenseComponents"^>
-    echo            ^<Component Id="GPLLicenseComponent" Guid="%GUID_STABLE_LICENSE_GPL%" Directory="LicensesDir"^>
+    echo            ^<Component Id="GPLLicenseComponent" Guid="%GUID_STABLE_LICENSE_GPL%" Directory="LicensesDir" ^>
     echo                ^<File Id="GPLLicense" Name="LICENSE.gpl3" Source="../LICENSES/LICENSE.gpl3" KeyPath="yes" /^>
     echo            ^</Component^>
     echo            ^<Component Id="MITLicenseComponent" Guid="%GUID_STABLE_LICENSE_MIT%" Directory="LicensesDir"^>

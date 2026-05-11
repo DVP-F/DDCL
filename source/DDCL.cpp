@@ -106,8 +106,10 @@ typedef struct _DNS_QUERY_REQUEST {
 #define BOLD    "\x1B[1m"
 #define CLEAR   "\x1B[2J\x1B[H"
 
-// config message flag
 static bool show_config = false;
+static bool show_help = false;
+
+#define VERSION "0.1.1"
 
 // toml config default
 constexpr const char* DEFAULT_CONF = R"(
@@ -120,12 +122,12 @@ log_path = ""
 use_virtual_terminal = true
 # Which checks to perform. Overrides any config below. Ordering is irrelevant.
 detections = [
-    "Internet",
-    "Ethernet",
-    "DNS resolution",
-    "VPN",
-    "Disks",
-    "UNC",
+	"Internet",
+	"Ethernet",
+	"DNS resolution",
+	"VPN",
+	"Disks",
+	"UNC",
 ]
 
 [Network]
@@ -1259,9 +1261,23 @@ static void initialize_runtime() {
 	ensure_log_location(); // make sure a log path is set and valid, or disable logging if not
 }
 
+static void print_help_text(char* calltext) {
+	// This handles the -h --help option. Self descriptive, really.
+	std::cout << BOLD BLUE << "=== DDCL v" << VERSION << " ===" << std::endl << std::endl;
+	std::cout << RESET << calltext << " [-h|--help] [-c|--config]" << std::endl << std::endl;
+	std::cout << "  -h --help" << std::endl;
+	std::cout << "      Display this help message" << std::endl;
+	std::cout << "  -c --config" << std::endl;
+	std::cout << "      Display a configuration summary" << std::endl << std::endl;
+	std::cout << "DDCL is a tool for surveying network and storage status changes." << std::endl;
+	std::cout << "Checks are performed once every second and logged to a location given through a fallback chain." << std::endl;
+	std::cout << " (See documentation at https://github.com/DVP-F/DDCL for detail)" << std::endl;
+	std::cout << "At the moment, logs will be written to " << YELLOW << log_path << RESET << std::endl;
+}
+
 static void print_config_summary() {
 	// This handles the -c --config option. Just prints the effective configuration after parsing conf.toml
-	std::cout << BOLD << "Disk Drive Connection Logger (DDCL) - Startup Summary\n" << RESET;
+	std::cout << BOLD BLUE << "=== Disk Drive Connection Logger (DDCL) v" << VERSION << " - Startup Summary===\n" << RESET;
 	std::cout << "Commandline arguments: " << BOLD << "--config";
 	std::cout << "\nEnabled Detections:\n  " << RESET GREEN;
 	for (const auto& kind : detection_kinds) {
@@ -1324,15 +1340,22 @@ int main(int argc, char* argv[]) {
 
 	// first of: handler arguments, if any.
 	if (argc > 2) {
-		std::cerr << "Too many arguments provided.\nUsage: DDCL.exe [-c|--config]\n";
+		std::cerr << "Too many arguments provided.\nUsage: " << argv[1] << " [-h|--help] [-c|--config]" << std::endl;
 		throw std::invalid_argument("Too many arguments provided");
 	}
 	if (argc == 2) { // 2 arguments since arg 0 is the binary call
+		if (std::string_view(argv[1]) == "-h" || std::string_view(argv[1]) == "--help") {
+			show_help = true;
+		}
 		if (std::string_view(argv[1]) == "-c" || std::string_view(argv[1]) == "--config") {
 			show_config = true;
 		}
 	}
 
+	if (show_help) {
+		print_help_text(argv[0]);
+		return(0);
+	}
 	if (show_config) {
 		print_config_summary();
 		return(0);

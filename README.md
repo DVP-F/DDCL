@@ -157,7 +157,7 @@ Minimum version is lowest version with known compatible syntax.
 - MSVC CLang (minimum recommended: MSVC 14.44.35207)
 - MSVC Linker (minimum recommended: MSVC 14.44.35207)
 - MS Resource Compiler (minimum recommended: Windows Kits for 10.0.26100.0)
-- WiX CLI Tools (minimum version: 7.0)
+- WiX CLI Tools (minimum version: 4.0)
 - Python (minimum version: 3.10.x)
 - Python packages:
   - `pyuac` (administrator elevation)
@@ -193,8 +193,9 @@ Each additionally contains License and Copyright notices by way of these files:
 - [./LICENSES/LICENSE.mit](./LICENSES/LICENSE.mit)  
 - [./NOTICE.txt](./NOTICE.txt)  
 
-__NOTE!__ The binaries are NOT static-linked and is therefore __NOT portable__!  
-They depend on the host machine to supply any otherwise missing libraries!
+__NOTE!__ The binaries are NOT static-linked and are therefore by default __NOT portable__!  
+They depend on the host machine to supply any otherwise missing libraries!  
+This includes the 'Standalone'  
 
 #### Full set (`DDCL_full.zip`)  
 
@@ -238,9 +239,9 @@ Contains the following:
    
    1. Move the `DDCL.exe` binary to the desired location.  
    2. Run it once to generate the default configuration file (config.toml) in the same directory.  
-   3. Edit the config file with what disks to check for, IP address to check connection to,    
+   3. Edit the config file with what disks to check for, IP address to check connection to,  
       UNC (SMB, etc.) paths to verify, DNS ovverride, expected DNS suffix, and more.
-   4. Run either `register_service.bat` or `DDCL_Installer.exe` to register the services.  
+   4. Run either `installer.bat` or `DDCL_Installer.exe` to register the app in the start menu and PATH.  
 
    For MSI install:  
 
@@ -259,19 +260,27 @@ Refer to the beneath table for applicable methods of execution by installation m
 | Command (`ddcl`) |                 |          X          |  X  |         X         |
 | Start menu       |                 |          X          |  X  |         X         |
 
+'From directory' here includes launching from File Explorer and from a terminal (`.\DDCL.exe`/`start DDCL.exe`)  
+
+#### First run  
+
+When DDCL registers a first-time run, it will print the help message before exiting after 30 seconds.  
+This help message can be found at [Commandline options](#commandline-options-for-ddclexe)  
+
 ### Logging  
 
 Logs are written to one of the following locations, in the same prioritization  
 (Edit the code if you want it to be different, dont be cheap. Learn some C++):  
 
-- {log_path if defined in `conf.toml`}\DDCL-Logs\DDCL_log-{´%d.%m.%Y-%H_%M_%S´}.csv
-- %LOCALAPPDATA%\DDCL-Logs\DDCL_log-{´%d.%m.%Y-%H_%M_%S´}.csv
-- %OneDriveCommercial%\DDCL-Logs\DDCL_log-{´%d.%m.%Y-%H_%M_%S´}.csv
-- %OneDrive%\DDCL-Logs\DDCL_log-{´%d.%m.%Y-%H_%M_%S´}.csv
-- C:\Users\%USERNAME%\DDCL-Logs\DDCL_log-{´%d.%m.%Y-%H_%M_%S´}.csv
-- &EXE_DIR&\DDCL-Logs\DDCL_log-{´%d.%m.%Y-%H_%M_%S´}.csv
+- {log_path}\DDCL-Logs\DDCL_log-\<timestamp>.csv
+- %LOCALAPPDATA%\DDCL-Logs\DDCL_log-\<timestamp>.csv
+- %OneDriveCommercial%\DDCL-Logs\DDCL_log-\<timestamp>.csv
+- %OneDrive%\DDCL-Logs\DDCL_log-\<timestamp>.csv
+- C:\Users\%USERNAME%\DDCL-Logs\DDCL_log-\<timestamp>.csv
+- &EXE_DIR&\DDCL-Logs\DDCL_log-\<timestamp>.csv
 
-The timestamp is the time of launching the application.  
+'\<timestamp>' is the time of launching the application, formatted as `%d.%m.%Y-%H_%M_%S`.  
+'{log_path}' is the path configured in `conf.toml`, if available.  
 
 The log contains only the CHANGES in status and the initial state, with a timestamp and any other relevant information.
 
@@ -299,5 +308,49 @@ timestamp,kind,value,info
 
 ### Commandline options for DDCL.exe  
 
+- -h, --help  
+   Print a help message, sleep for 20 seconds, then exit.
 - -c, --config  
    Print the current configuration to the console and exit.   
+
+The help message is roughly as follows:  
+
+```plaintext
+===== DDCL v{version number} =====
+
+{call} [-h|--help] [-c|--config]
+
+  -h --help
+      Display this help message
+  -c --config
+      Display a configuration summary
+
+DDCL is a tool for surveying network and storage status changes.
+Checks are performed once every second and logged to a location given through a fallback chain.
+ (See documentation at https://github.com/DVP-F/DDCL for detail)
+At the moment, logs will be written to {location}
+```
+
+including some string emplacement.
+
+The configuration summary looks something like this:
+
+```plaintext
+=== Disk Drive Connection Logger (DDCL) v{version number} - Startup Summary ===
+Commandline arguments: --config
+Enabled Detections:
+  Internet Connectivity, Ethernet, DNS Resolution, VPN Connection, Drive Availability, UNC Availability, 
+Log Path: C:\some\path\DDCL-Logs\DDCL_log-<timestamp>.csv
+Virtual Terminal Processing: Requested, Status: ON
+
+Network:
+  Check Host: 1.1.1.1
+  DNS Server: ns1.altibox.net
+  Expected Domain Suffix: domain.org
+  Expected VPN Hostname: .?hummina\.hummina.?
+
+Disks:
+  Local Drives: C
+  UNC paths:
+    \\somewhere\else
+```
