@@ -1,0 +1,50 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="yBQiX5LUQYbqaOvEs4An">
+    <mxGraphModel dx="1414" dy="1157" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" background="none" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-6" edge="1" parent="1" source="KDyrUQjwXbb_HKYCb1ik-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="KDyrUQjwXbb_HKYCb1ik-5" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-1" parent="1" style="ellipse;whiteSpace=wrap;html=1;" value="&lt;div&gt;Program start&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="120" x="200" y="-40" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-9" edge="1" parent="1" source="KDyrUQjwXbb_HKYCb1ik-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="KDyrUQjwXbb_HKYCb1ik-8" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-10" connectable="0" parent="KDyrUQjwXbb_HKYCb1ik-9" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];labelPosition=center;verticalLabelPosition=middle;spacingBottom=5;" value="&lt;div&gt;Failed&lt;/div&gt;" vertex="1">
+          <mxGeometry relative="1" x="-0.125" y="2" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-12" edge="1" parent="1" source="KDyrUQjwXbb_HKYCb1ik-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="KDyrUQjwXbb_HKYCb1ik-11" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-13" connectable="0" parent="KDyrUQjwXbb_HKYCb1ik-12" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" value="Succeeded" vertex="1">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-2" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="Result" vertex="1">
+          <mxGeometry height="80" width="120" x="200" y="180" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-4" parent="1" style="rhombus;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="80" width="120" x="760" y="480" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-7" edge="1" parent="1" source="KDyrUQjwXbb_HKYCb1ik-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="KDyrUQjwXbb_HKYCb1ik-2" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Initialize WSA" vertex="1">
+          <mxGeometry height="60" width="120" x="200" y="80" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-8" parent="1" style="whiteSpace=wrap;html=1;" value="Abort with an error" vertex="1">
+          <mxGeometry height="60" width="120" y="190" as="geometry" />
+        </mxCell>
+        <mxCell id="KDyrUQjwXbb_HKYCb1ik-11" parent="1" style="whiteSpace=wrap;html=1;" value="initialize_runtime()" vertex="1">
+          <mxGeometry height="60" width="120" x="200" y="350" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
