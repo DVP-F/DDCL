@@ -170,10 +170,8 @@ REM Write the WiX source file
 	echo       ^<ComponentRef Id="NoticeComponent" /^>
 	echo       ^<ComponentGroupRef Id="LicenseComponents"/^>
 	echo     ^</Feature^>
-	echo     ^<CustomAction Id="SetLaunchApp1" Property="LaunchApp1" Value="&quot;[#Installer]&quot;" /^>
-	echo     ^<CustomAction Id="LaunchApp1" ExeCommand="[LaunchApp1]" Execute="deferred" Directory="INSTALLFOLDER" Impersonate="no" Return="asyncNoWait" /^>
+	echo     ^<CustomAction Id="LaunchApp1" FileRef="Installer" ExeCommand="" Execute="deferred" Return="asyncNoWait" Impersonate="no" /^>
 	echo     ^<InstallExecuteSequence^>
-	echo       ^<Custom Action="SetLaunchApp1" After="CostFinalize"/^>
 	echo       ^<Custom Action="LaunchApp1" Before="InstallFinalize"/^>
 	echo     ^</InstallExecuteSequence^>
 	echo   ^</Package^>
