@@ -1264,21 +1264,21 @@ static void initialize_runtime() {
 static void print_help_text(char* calltext) {
 	// This handles the -h --help option. Self descriptive, really.
 	std::cout << BOLD BLUE << "=== DDCL v" << VERSION << " ===" << std::endl << std::endl;
-	std::cout << RESET << calltext << " [-h|--help] [-c|--config]" << std::endl << std::endl;
+	std::cout << RESET GREEN << calltext << " [-h|--help] [-c|--config]" << std::endl << std::endl;
 	std::cout << "  -h --help" << std::endl;
 	std::cout << "      Display this help message" << std::endl;
 	std::cout << "  -c --config" << std::endl;
-	std::cout << "      Display a configuration summary" << std::endl << std::endl;
+	std::cout << "      Display a configuration summary" << RESET << std::endl << std::endl;
 	std::cout << "DDCL is a tool for surveying network and storage status changes." << std::endl;
 	std::cout << "Checks are performed once every second and logged to a location given through a fallback chain." << std::endl;
 	std::cout << " (See documentation at https://github.com/DVP-F/DDCL for detail)" << std::endl;
-	std::cout << "At the moment, logs will be written to " << YELLOW << log_path << RESET << std::endl;
+	std::cout << "At the moment, logs will be written to " << YELLOW << log_path.remove_filename().string() << RESET << std::endl;
 }
 
-static void print_config_summary() {
+static void print_config_summary(char* choice) {
 	// This handles the -c --config option. Just prints the effective configuration after parsing conf.toml
 	std::cout << BOLD BLUE << "=== Disk Drive Connection Logger (DDCL) v" << VERSION << " - Startup Summary===\n" << RESET;
-	std::cout << "Commandline arguments: " << BOLD << "--config";
+	std::cout << "Commandline arguments: " << BOLD << choice;
 	std::cout << "\nEnabled Detections:\n  " << RESET GREEN;
 	for (const auto& kind : detection_kinds) {
 		switch (kind) {
@@ -1303,8 +1303,8 @@ static void print_config_summary() {
 		}
 	}
 	std::cout << "\n";
-	std::cout << RESET BOLD << "Log Path: " << RESET BLUE << log_path.string() << RESET << "\n";
-	std::cout << BOLD << "Virtual Terminal Processing: " << RESET YELLOW << (use_vt ? "Requested" : "Not Requested");
+	std::cout << RESET BOLD << "Log Path: " << RESET BLUE << log_path.remove_filename().string() << RESET << "\n";
+	std::cout << BOLD << "Virtual Terminal Processing: " << RESET YELLOW << (use_vt ? "Requested" : "Not Requested\n\n");
 	if (use_vt) {
 		std::cout << RESET BOLD << ", Status: " << (vt_enabled ? GREEN "ON" : YELLOW "OFF") << RESET << "\n\n"; // This will be set in initialize_runtime after attempting to enable VT
 	}
@@ -1340,7 +1340,7 @@ int main(int argc, char* argv[]) {
 
 	// first of: handler arguments, if any.
 	if (argc > 2) {
-		std::cerr << "Too many arguments provided.\nUsage: " << argv[1] << " [-h|--help] [-c|--config]" << std::endl;
+		std::cerr << "Too many arguments provided.\nUsage: " << argv[0] << " [-h|--help] [-c|--config]" << std::endl;
 		throw std::invalid_argument("Too many arguments provided");
 	}
 	if (argc == 2) { // 2 arguments since arg 0 is the binary call
@@ -1357,7 +1357,7 @@ int main(int argc, char* argv[]) {
 		return(0);
 	}
 	if (show_config) {
-		print_config_summary();
+		print_config_summary(argv[1]);
 		return(0);
 	}
 
