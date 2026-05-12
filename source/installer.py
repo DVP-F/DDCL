@@ -5,7 +5,7 @@
 # See `NOTICE.txt` for further Licensing information
 
 #? trimmed down imports to minimum
-from os import getcwd, path
+from os import getcwd, path, environ, pathsep
 from subprocess import run as srun, check_output, DEVNULL
 from sys import argv
 from win32com.client import Dispatch as COMDispatch
@@ -51,6 +51,8 @@ def _init_registry_keys() -> None:
 		install_path if install_path else ''}" /f', shell=True)
 	# Add flag for install status
 	srun(r'reg add "HKEY_LOCAL_MACHINE\SOFTWARE\DDCL" /v InstallStatus /reg:64 /t REG_DWORD /d 0 /f', shell=True)
+	# Add to startup apps list machine-wide
+	srun(fr'reg add "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run" /v DDCL /reg:64 /t REG_SZ /d "{install_path}" /f')
 
 def _add_lnk()->bool:
 	try:
@@ -67,9 +69,21 @@ def _add_lnk()->bool:
 	except:
 		return False
 
+def is_dir_in_path(dir_path: str) -> bool:
+    path_str = environ.get("PATH", "")
+    if not path_str:
+        return False
+    norm_dir = path.normcase(path.normpath(dir_path))
+    for entry in path_str.split(pathsep):
+        entry = path.normcase(path.normpath(entry))
+        if entry == norm_dir:
+            return True
+    return False
+
 def _add_to_path()->bool:
 	try:
-		srun(rf'setx /M PATH "%PATH%;{install_path}"', shell=True)
+		if not is_dir_in_path(install_path):
+			srun(rf'setx /M PATH "%PATH%;{install_path}"', shell=True)
 		return True
 	except: return False
 

@@ -72,6 +72,7 @@ REM Init registry keys
 reg add "HKEY_LOCAL_MACHINE\SOFTWARE\DDCL" /ve /t REG_SZ /d "" /f >nul 2>&1
 reg add "HKEY_LOCAL_MACHINE\SOFTWARE\DDCL" /v InstallPath /t REG_SZ /d "%INSTALL_PATH%" /f >nul 2>&1
 reg add "HKEY_LOCAL_MACHINE\SOFTWARE\DDCL" /v InstallStatus /t DWORD /d 0 /f >nul 2>&1
+reg add "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Run" /v DDCL /reg:64 /t REG_SZ /d "%INSTALL_PATH%" /f >nul 2>&1
 
 REM Create Start Menu folder and shortcut
 mkdir "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\DDCL" 2>nul
@@ -87,11 +88,18 @@ echo oLink.Save
 cscript //nologo "%temp%\create_lnk.vbs" >nul 2>&1 && del "%temp%\create_lnk.vbs" 2>nul
 
 REM Add to PATH (system-wide)
-setx /M PATH "%PATH%;%INSTALL_PATH%" >nul 2>&1
-if errorlevel 1 (
-    echo Warning: Failed to update PATH ^(new sessions only^)
-    call :flag_failed
+ECHO;%PATH% | findstr /R /C:";%INSTALL_PATH%;" >NUL
+IF %ERRORLEVEL% EQU 0 (
+    echo Already added to PATH!
+) ELSE (
+    setx /M PATH "%PATH%;%INSTALL_PATH%" >nul 2>&1
+    if errorlevel 1 (
+        echo Warning: Failed to update PATH ^(new sessions only^)
+        call :flag_failed
+    )
 )
+
+
 
 echo.
 echo Installation completed successfully!
