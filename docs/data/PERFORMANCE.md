@@ -24,9 +24,9 @@ App version: 0.1.0
 One measurement was taken at the end of this time, before a restart to capture the initial state.  
 Both measurement were taken using Process Hacker.  
 
-|                  At 68 hours                |                 At 0 hours                |
-|:-------------------------------------------:|:-----------------------------------------:|
-| ![Test 1 - 68 hours](../../imgs/t1_68h.png) | ![Test 1 - 0 hours](../../imgs/t1_0h.png) |
+|                     At 68 hours                  |                    At 0 hours                  |
+|:------------------------------------------------:|:----------------------------------------------:|
+| ![Test 1 - 68 hours](../../media/png/t1_68h.png) | ![Test 1 - 0 hours](../../media/png/t1_0h.png) |
 
 The most noticable change is an increased memory usage - however this is not a significant change at this time and should be tested further before any conclusions are drawn.  
 Also of note is a stable low CPU usage and generally low I/O and Memory usage.  
@@ -59,7 +59,7 @@ time ./ddcl.exe | grep -E "^[0-9]{14}.?$"
 This effectively logs the exact time DDCL updates its data and how long the entire chain takes - this is subsequenty analyzed in a spreadsheet editor.  
 
 Additionally, this load was placed on the device + 91% Memory use (14.0GB)  
-![Test 2 - Processor load](../../imgs/t2_pl.png)
+![Test 2 - Processor load](../../media/png/t2_pl.png)
 
 `time` reported the following:
 
