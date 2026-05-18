@@ -18,7 +18,8 @@
 4. Prep for use in-prod  
     -> Update documentation and make techincal docs  
 5. Remake installer.py in C or Rust  
-   -> Minimize size in deployment (currently 7MB)  
+   -> Minimize size in deployment (currently 7MB)
+6. Make an uninstaller  
 
 ## Table and checklist  
 
