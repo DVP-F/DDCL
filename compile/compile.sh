@@ -63,6 +63,11 @@ handle_args() {
     fi
 }
 
+# fn check if in env
+check_resolve() {
+    command -v "$1" >/dev/null 2>&1
+}
+
 # functions to install mingw if not installed
 install_mingw_gcc() {
     echo "gcc/cc equivalent Mingw64 not found, attempting install."
@@ -172,7 +177,7 @@ try_compile() {
     # if it isnt, try to install it.
     case "$1" in
         gcc|cc)
-            if command -v x86_64-w64-mingw32-gcc >/dev/null 2>&1; then
+            if check_resolve x86_64-w64-mingw32-gcc; then
                 compile_gcc
             # if not, check with pkgman as well as if it can be installed (if defined)
             else
@@ -180,7 +185,7 @@ try_compile() {
             fi
             ;;
         g++)
-            if command -v x86_64-w64-mingw32-g++ >/dev/null 2>&1; then
+            if check_resolve x86_64-w64-mingw32-g++; then
                 compile_gpp
             # if not, check with pkgman as well as if it can be installed (if defined)
             else
@@ -188,7 +193,7 @@ try_compile() {
             fi
             ;;
         clang)
-            if command -v x86_64-w64-mingw32-clang++ >/dev/null 2>&1; then
+            if check_resolve x86_64-w64-mingw32-clang++; then
                 compile_clang
             # if not, check with pkgman as well as if it can be installed (if defined)
             else
