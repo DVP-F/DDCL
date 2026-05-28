@@ -18,8 +18,14 @@
 4. Prep for use in-prod  
     -> Update documentation and make techincal docs  
 5. Remake installer.py in C or Rust  
-   -> Minimize size in deployment (currently 7MB)
+   -> Minimize size in deployment (currently 7MB)  
 6. Make an uninstaller  
+   - split installers  
+     -> msi ( use native registry key write )  
+     -> manual/standalone  
+   - uninstall differs too then:  
+     -> msi - use native uninstall, but still just an additional bin.    
+     -> manual/standalone - just an extra bin in the install folder  
 
 ## Table and checklist  
 
@@ -52,3 +58,6 @@
 | Prep for use in-prod     | Package archives and binaries               |   X   |
 | Prep for use in-prod     | Release and distribute                      |   X   |
 | Rewrite `installer.py`   | Rust, C, Zig?                               |       |
+| Redo (un)install         | Uninstaller.cpp                             |       |
+| Redo (un)install         | Update msi script                           |       |
+| Redo (un)install         | Update packaging scripts                    |       |
