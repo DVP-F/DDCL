@@ -98,7 +98,7 @@ REM Set the environment vars for clang
 call "%VC_VARS%" x64
 
 
-REM Compile runner (DiskDriveConnectionLogger.cpp)
+REM Compile runner (DDCL.cpp)
 REM This assumes you have VS installed and it supports compiling C++17
 %CLANG_PATH% /EHsc /std:c++17 /c ..\source\DDCL.cpp /Fo:"runner.obj"
 if exist "runner.obj" (
