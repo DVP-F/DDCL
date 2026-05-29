@@ -1325,6 +1325,14 @@ static void print_config_summary(char* choice) {
 	}
 }
 
+void ResizeConsoleHeight(SHORT rows, SHORT cols = 120) {
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    COORD bufferSize = { cols, rows };
+    SetConsoleScreenBufferSize(hOut, bufferSize);
+    SMALL_RECT windowSize = {0, 0, cols - 1, rows - 1 };
+    SetConsoleWindowInfo(hOut, TRUE, &windowSize);
+}
+
 int main(int argc, char* argv[]) {
 	using namespace std::string_view_literals;
 
@@ -1368,10 +1376,15 @@ int main(int argc, char* argv[]) {
 		return 2;
 	}
 
+	// init a decent size
+	ResizeConsoleHeight(20);
+	SHORT current_size = 20;
+
 	// Main monitoring loop 
 	try {
 		auto timer_start = std::chrono::steady_clock::now();
 		while (g_running.load()) {
+			SHORT linecount = 20; // 16 or smn guaranteed lines
 			auto loop_start = std::chrono::steady_clock::now();
 			update_status();
 
@@ -1402,6 +1415,7 @@ int main(int argc, char* argv[]) {
 					std::cout << "  " << BOLD << "VPN Local IP: " << RESET << curr_vpn_host.local_ip << "\n";
 					std::cout << "  " << BOLD << "VPN Matches Expected Hostname: " << RESET << \
 						((!net.expected_vpn_hostname.empty() && std::regex_match(curr_vpn_host.hostname, std::regex(net.expected_vpn_hostname, std::regex_constants::icase))) ? GREEN "YES" : RED "NO") << RESET << "\n";
+					linecount += 3;
 				}
 				catch (const std::regex_error& ex) {
 					// print a msg about the user being bad at regexes , print context, and then raise the error again to halt execution
@@ -1416,16 +1430,23 @@ int main(int argc, char* argv[]) {
 			}
 			std::cout << "\n" << BOLD << "Drives:\n" << RESET;
 			for (int st = 0; st < curr_drives.size(); st++) {
+				linecount++;
 				bool status = curr_drives[st];				// actually fine bc they're synced
 				std::cout << (status ? GREEN : RED) << "  " << disks.locals[st] << " " << (status ? "OK" : "FAIL") << RESET << "\n";
 			}
 			std::cout << "\n" << BOLD << "UNC:\n" << RESET;
 			for (int st = 0; st < curr_unc.size(); st++) {
+				linecount++;
 				bool status = curr_unc[st];
 				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED)) << "  " << disks.unc[st] << " " << (status ? "OK" : "FAIL") << RESET << "\n";
 			}
 			std::cout << "\n" << BOLD << MAGENTA << "Monitoring...\n" << RESET;
 			std::cout << BLUE << "Log path: " << log_path.string().c_str() << "\n" << RESET << std::endl;
+
+			// update window size
+			if (linecount < current_size) {
+				ResizeConsoleHeight(linecount);
+			}
 
 			// Perform the 1s timed loop
 			auto time_end = std::chrono::steady_clock::now();

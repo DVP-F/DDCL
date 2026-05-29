@@ -59,7 +59,7 @@
 | Prep for use in-prod     | Package archives and binaries               |   X   |
 | Prep for use in-prod     | Release and distribute                      |   X   |
 | Rewrite `installer.py`   | Rust, C, Zig?                               |       |
-| Redo (un)install         | Uninstaller.cpp                             |       |
+| Redo (un)install         | uninstall.cpp                               |       |
 | Redo (un)install         | Update msi script                           |       |
 | Redo (un)install         | Update packaging scripts                    |       |
 | TUI                      | Auto-resize window size                     |       |

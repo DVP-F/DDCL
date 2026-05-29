@@ -137,7 +137,7 @@ REM Write the WiX source file
 	echo   ^<Package Id="%MSIPKG_ID%" Name="%runner_name%" Language="1033" Version="%version%" Manufacturer="%company_name%" UpgradeCode="%GUID_STABLE_UPGRADE%" InstallerVersion="500" Compressed="yes" Scope="perMachine"^>
 	echo     ^<MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes" AllowDowngrades="no" DowngradeErrorMessage="A newer version of %runner_name% is already installed." /^>
 	echo     ^<MediaTemplate EmbedCab="yes" /^>
-    echo     ^<StandardDirectory Id="ProgramFiles6432Folder" ^>
+    echo     ^<StandardDirectory Id="ProgramFiles64Folder" ^>
     echo       ^<Directory Id="INSTALLFOLDER" Name="%runner_name%" /^>
     echo     ^</StandardDirectory^>
     echo     ^<DirectoryRef Id="INSTALLFOLDER"^>
