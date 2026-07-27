@@ -3,4 +3,4 @@ dist/*
 
 # Set up for easier custom building
 compile/compile_package_*.bat
-source/*.toml
+source/app/*.toml
