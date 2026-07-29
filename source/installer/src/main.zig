@@ -279,8 +279,16 @@ pub fn main(init: std.process.Init) !void {
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const stdout_writer = &stdout_file_writer.interface;
 
-    try _doTasks(stdout_writer, arena) catch |err| {
-        try onFail(err);
+    var MSI_INSTALL: bool = false;
+    var args = std.process.args();
+    _ = args.next(); // Skip program name.
+    const arg: ?[]const u8 = args.next();
+    if (std.mem.eql(u8, arg, "--from-msi")) {
+        MSI_INSTALL = true;
+    }
+
+    try _doTasks(arena) catch |err| {
+        try onFail(stdout_writer, err);
         try stdout_writer.flush();
         return;
     };

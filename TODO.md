@@ -64,6 +64,8 @@
 | Redo (un)install         | Update packaging scripts                    |       |
 | TUI                      | Auto-resize window size                     |       |
 
+ADD reg write from msi 'InstallType' and use to direct (un)install instead of args
+
 ```plaintext
        ,
        \`-._           __

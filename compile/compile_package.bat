@@ -170,9 +170,11 @@ REM Write the WiX source file
 	echo       ^<ComponentRef Id="NoticeComponent" /^>
 	echo       ^<ComponentGroupRef Id="LicenseComponents"/^>
 	echo     ^</Feature^>
-	echo     ^<CustomAction Id="LaunchApp1" FileRef="Installer" ExeCommand="" Execute="deferred" Return="asyncNoWait" Impersonate="no" /^>
+	echo     ^<CustomAction Id="LaunchInstaller" FileRef="Installer" ExeCommand="" Execute="deferred" Return="asyncNoWait" Impersonate="no" /^>
+	REM echo     ^<CustomAction Id="LaunchUninstaller" FileRef="Uninstaller" ExeCommand="--from-msi" Execute="deferred" Return="asyncNoWait" Impersonate="no" /^>
 	echo     ^<InstallExecuteSequence^>
-	echo       ^<Custom Action="LaunchApp1" Before="InstallFinalize"/^>
+	echo       ^<Custom Action="LaunchInstaller" Before="InstallFinalize"/^>
+	REM echo       ^<Custom Action="LaunchUninstaller" Before="RemoveFiles" Condition="REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" /^>
 	echo     ^</InstallExecuteSequence^>
 	echo   ^</Package^>
 	echo ^</Wix^>
