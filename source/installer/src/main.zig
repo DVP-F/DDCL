@@ -272,20 +272,42 @@ fn onSuccess(writer: *Io.Writer) !void {
     );
 }
 
+fn _isMsiInstall() !bool {
+    var key: windows.HKEY = undefined;
+    const result = windows.advapi32.RegOpenKeyExW(
+        windows.HKEY_LOCAL_MACHINE,
+        std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+        0,
+        windows.KEY_QUERY_VALUE | windows.KEY_WOW64_64KEY,
+        &key,
+    );
+    defer _ = windows.advapi32.RegCloseKey(key);
+    if (result != 0)
+        return error.OpenKeyFailed;
+    var value: u32 = undefined;
+    var _value_size: windows.DWORD = @sizeOf(u32);
+    const query_result = windows.advapi32.RegQueryValueExW(
+        key,
+        std.unicode.utf8ToUtf16LeStringLiteral("InstallType"),
+        null,
+        null,
+        @ptrCast(&value),
+        &_value_size,
+    );
+    if (query_result != 0)
+        return error.QueryValueFailed;
+    if (value == 1)
+        return true;
+    return false;
+}
+
 pub fn main(init: std.process.Init) !void {
     const arena: std.mem.Allocator = init.arena.allocator();
     const io: Io = init.io;
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const stdout_writer = &stdout_file_writer.interface;
-
-    var MSI_INSTALL: bool = false;
-    var args = std.process.args();
-    _ = args.next(); // Skip program name.
-    const arg: ?[]const u8 = args.next();
-    if (std.mem.eql(u8, arg, "--from-msi")) {
-        MSI_INSTALL = true;
-    }
+    const MSI_INSTALL: bool = try _isMsiInstall();
 
     try _doTasks(arena) catch |err| {
         try onFail(stdout_writer, err);
