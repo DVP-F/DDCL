@@ -1,5 +1,6 @@
 const std = @import("std");
 const Io = std.Io;
+const windows = std.os.windows;
 
 const installer = @import("installer");
 
@@ -52,6 +53,118 @@ fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
     return error.FileNotFound;
 }
 
+fn _doEditRegistry(installDir: []const u8) !void {
+    const access = windows.KEY_WRITE | windows.KEY_WOW64_64KEY;
+    const installDir16 = try std.unicode.utf8ToUtf16LeAlloc(
+        std.heap.page_allocator,
+        installDir,
+    );
+    defer std.heap.page_allocator.free(installDir16);
+    {
+        var key: windows.HKEY = undefined;
+        const result = windows.advapi32.RegCreateKeyExW(
+            windows.HKEY_LOCAL_MACHINE,
+            std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+            0,
+            null,
+            0,
+            access,
+            null,
+            &key,
+            null,
+        );
+        if (result != 0)
+            return error.CreateKeyFailed;
+        defer _ = windows.advapi32.RegCloseKey(key);
+        var set_result = windows.advapi32.RegSetValueExW(
+            key,
+            std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
+            0,
+            windows.REG_SZ,
+            @ptrCast(installDir16.ptr),
+            @intCast(installDir16.len * @sizeOf(u16)),
+        );
+        if (set_result != 0)
+            return error.SetValueFailed;
+        const value: windows.DWORD = 0;
+        set_result = windows.advapi32.RegSetValueExW(
+            key,
+            std.unicode.utf8ToUtf16LeStringLiteral("InstallStatus"),
+            0,
+            windows.REG_DWORD,
+            @ptrCast(&value),
+            @sizeOf(windows.DWORD),
+        );
+        if (set_result != 0)
+            return error.SetValueFailed;
+    }
+    {
+        var key: windows.HKEY = undefined;
+        const result = windows.advapi32.RegOpenKeyExW(
+            windows.HKEY_LOCAL_MACHINE,
+            std.unicode.utf8ToUtf16LeStringLiteral(
+                "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            ),
+            0,
+            windows.KEY_WRITE | windows.KEY_WOW64_64KEY,
+            &key,
+        );
+        if (result != 0)
+            return error.OpenKeyFailed;
+        defer _ = windows.advapi32.RegCloseKey(key);
+        const set_result = windows.advapi32.RegSetValueExW(
+            key,
+            std.unicode.utf8ToUtf16LeStringLiteral("DDCL"),
+            0,
+            windows.REG_SZ,
+            @ptrCast(installDir16.ptr),
+            @intCast(installDir16.len * @sizeOf(u16)),
+        );
+        if (set_result != 0)
+            return error.SetValueFailed;
+    }
+}
+
+fn editRegistry(installDir: []u8) bool {
+    try _doEditRegistry(installDir) catch {
+        return false;
+    };
+    return true;
+}
+
+// fn deleteValue() void {
+//     var key: windows.HKEY = undefined;
+
+//     const path = std.unicode.utf8ToUtf16LeStringLiteral(
+//         "Software\\MyApp",
+//     );
+
+//     if (windows.advapi32.RegOpenKeyExW(
+//         windows.HKEY_CURRENT_USER,
+//         path,
+//         0,
+//         windows.KEY_WRITE | windows.KEY_WOW64_64KEY,
+//         &key,
+//     ) != 0) return;
+
+//     defer _ = windows.advapi32.RegCloseKey(key);
+
+//     const name = std.unicode.utf8ToUtf16LeStringLiteral(
+//         "Enabled",
+//     );
+
+//     _ = windows.advapi32.RegDeleteValueW(key, name);
+
+//     const path = std.unicode.utf8ToUtf16LeStringLiteral(
+//         "Software\\MyApp",
+//     );
+
+//     _ = windows.advapi32.RegDeleteKeyW(
+//         windows.HKEY_CURRENT_USER,
+//         path,
+//     );
+//     }
+
 fn _doAddShortcut(arena: std.mem.Allocator, installDir: std.fs.path) !void {
     //* let errors propagate out
     // first off create the directory
@@ -97,6 +210,68 @@ fn addShortcut(arena: std.mem.Allocator, installDir: std.fs.path) bool {
     return true;
 }
 
+fn _doTasks(arena: std.mem.Allocator) !void {
+    const installDir: []u8 = try getInstallDir(arena);
+    defer arena.free(installDir); // also shuts up about unused const
+    const lnkStatus: bool = addShortcut(arena, installDir);
+    defer arena.free(lnkStatus);
+    const regStatus: bool = editRegistry(installDir);
+    defer arena.free(regStatus);
+}
+
+fn _fallbackRegUpdate() !void {
+    // fallback to a guarded command.
+    var child = std.process.Child.init(
+        &[_][]const u8{ "reg", "add", "\"HKEY_LOCAL_MACHINE\\SOFTWARE\\DDCL\"", "/v", "InstallStatus", "/t", "DWORD", "/d", "1", "/f", ">nul", "2>&1" },
+        std.heap.page_allocator,
+    );
+    _ = try child.spawnAndWait();
+}
+
+fn onFail(writer: *Io.Writer, err: anyerror) !void {
+    std.debug.print("Error: {}\n", .{err});
+    try writer.print(
+        \\Installation failed - registry marked as failed (InstallStatus=1).
+    );
+    var key: windows.HKEY = undefined;
+    const result = windows.advapi32.RegOpenKeyExW(
+        windows.HKEY_LOCAL_MACHINE,
+        std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+        0,
+        windows.KEY_SET_VALUE | windows.KEY_WOW64_64KEY,
+        &key,
+    );
+    if (result != 0) {
+        return error.OpenKeyFailed;
+    } {
+        defer _ = windows.advapi32.RegCloseKey(key);
+        const value: windows.DWORD = 1;
+        const set_result = windows.advapi32.RegSetValueExW(
+            key,
+            std.unicode.utf8ToUtf16LeStringLiteral("InstallStatus"),
+            0,
+            windows.REG_DWORD,
+            @ptrCast(&value),
+            @sizeOf(windows.DWORD),
+        );
+        if (set_result != 0) {
+            return error.SetValueFailed;
+        } {
+            try _fallbackRegUpdate();
+        }
+    }
+}
+
+fn onSuccess(writer: *Io.Writer) !void {
+    try writer.print(\\
+        \\Installation completed successfully!
+        \\echo - Registry keys created under HKLM\SOFTWARE\DDCL
+        \\echo - Start Menu shortcut added
+        \\echo - PATH updated (restart required for new sessions)
+        \\
+    );
+}
+
 pub fn main(init: std.process.Init) !void {
     const arena: std.mem.Allocator = init.arena.allocator();
     const io: Io = init.io;
@@ -104,7 +279,13 @@ pub fn main(init: std.process.Init) !void {
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const stdout_writer = &stdout_file_writer.interface;
 
-    const lnkStatus: bool = try addShortcut(arena, );
+    try _doTasks(stdout_writer, arena) catch |err| {
+        try onFail(err);
+        try stdout_writer.flush();
+        return;
+    };
 
-    try stdout_writer.flush(); // Don't forget to flush!
+    try onSuccess(stdout_writer);
+    try stdout_writer.flush();
+    return;
 }

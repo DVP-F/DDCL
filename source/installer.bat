@@ -113,5 +113,5 @@ exit /b 0
 echo.
 echo Installation failed - registry marked as failed ^(InstallStatus=1^).
 timeout /t 5 >nul
-reg add "HKEY_LOCAL_MACHINE\SOFTWARE\DDCL" /v InstallStatus /t QWORD /d 1 /f >nul 2>&1
+reg add "HKEY_LOCAL_MACHINE\SOFTWARE\DDCL" /v InstallStatus /t DWORD /d 1 /f >nul 2>&1
 exit /b 1
