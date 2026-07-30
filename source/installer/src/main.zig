@@ -3,6 +3,7 @@ const Io = std.Io;
 const windows = std.os.windows;
 
 const installer = @import("installer");
+var MSI_INSTALL: bool = undefined;
 
 //? real quick: im aware that std.fs.cwd() use is deprecated since 0.16 zig. IDC tho!
 //? im not gonna make this more complicated for myself
@@ -12,9 +13,46 @@ const installer = @import("installer");
 // defer arena.deinit();
 // const allocator: std.mem.Allocator = arena.allocator();
 
-fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
+fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
+    const key: windows.HKEY = undefined;
+    var ty: windows.DWORD = undefined;
+    // get the required size of u16 array
+    var size: windows.DWORD = 0;
+    var result = windows.advapi32.RegQueryValueExW(
+        key,
+        std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
+        null,
+        &ty,
+        null,
+        &size,
+    );
+    defer _ = windows.advapi32.RegCloseKey(key);
+    if (result != 0)
+        return error.OpenKeyFailed;
+    std.debug.assert(ty == windows.REG_SZ); // debug assert type is REG_SZ (the expected type)
+    // read in the value
+    const utf16: []u16 = try arena.alloc(u16, size / @sizeOf(u16));
+    defer arena.free(utf16);
+    result = windows.advapi32.RegQueryValueExW(
+        key,
+        std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
+        null,
+        null,
+        @ptrCast(utf16.ptr),
+        &size,
+    );
+    if (result != 0)
+        return error.OpenKeyFailed;
+    // normalize and convert
+    const len = std.mem.indexOfScalar(u16, utf16, 0) orelse utf16.len;
+    const install_path: []u8 = try std.unicode.utf16LeToUtf8Alloc(arena, utf16[0..len]);
+    defer arena.free(install_path);
+    return install_path;
+}
+
+fn _doGetInstallDir_CWD(arena: std.mem.Allocator) ![]u8 {
     // current directory is plausible
-    var installDir: []u8 = try std.process.getEnvVarOwned(arena, "cd");
+    var installDir = try std.process.getEnvVarOwned(arena, "cd");
     defer arena.free(installDir);
     // see if executable is here
     if (
@@ -51,6 +89,18 @@ fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
     }
     // couldnt verify dir
     return error.FileNotFound;
+}
+
+fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
+    var installDir: []u8 = undefined;
+    if (MSI_INSTALL) {
+        // if msi installed, check the registry key for location and assume it to be correct.
+        installDir = try _doGetInstallDir_MSI(arena);
+    } {
+        // else use cwd
+        installDir = try _doGetInstallDir_CWD(arena);
+    }
+    return installDir;
 }
 
 fn _doEditRegistry(installDir: []const u8) !void {
@@ -217,6 +267,7 @@ fn _doTasks(arena: std.mem.Allocator) !void {
     defer arena.free(lnkStatus);
     const regStatus: bool = editRegistry(installDir);
     defer arena.free(regStatus);
+
 }
 
 fn _fallbackRegUpdate() !void {
@@ -306,8 +357,8 @@ pub fn main(init: std.process.Init) !void {
     const io: Io = init.io;
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
-    const stdout_writer = &stdout_file_writer.interface;
-    const MSI_INSTALL: bool = try _isMsiInstall();
+    const stdout_writer: *Io.Writer = &stdout_file_writer.interface;
+    MSI_INSTALL = try _isMsiInstall();
 
     try _doTasks(arena) catch |err| {
         try onFail(stdout_writer, err);
