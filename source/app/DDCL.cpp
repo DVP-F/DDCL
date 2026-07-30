@@ -574,9 +574,18 @@ static std::vector<bool> resolve_hostname(const std::string& hostname, const std
 	return results;
 }
 
-static std::array<const char*, 2> GetNetworkInfo() {
-	static std::string storage[2];  // Static lifetime for returned pointers
-	std::array<const char*, 2> result = { nullptr, nullptr };
+struct NetworkInfo {
+	std::string GUID;
+	std::string FName;
+	std::string Description;
+	std::string DNSSuffix;
+	std::string MAC;
+	std::string PrimaryDHCPv4;
+	std::string PrimaryDNS;
+	std::string PrimaryGateway;
+};
+
+void GetNetworkInfo() {
 	ULONG bufLen = 15 * 1024;
 	PIP_ADAPTER_ADDRESSES pAddrs = (PIP_ADAPTER_ADDRESSES)malloc(bufLen);
 	DWORD ret = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX,
@@ -588,21 +597,7 @@ static std::array<const char*, 2> GetNetworkInfo() {
 			nullptr, pAddrs, &bufLen);
 	}
 	if (ret == NO_ERROR) {
-		// for (PIP_ADAPTER_ADDRESSES p = pAddrs; p; p = p->Next) {
-		// 	if (p->IfType == IF_TYPE_ETHERNET_CSMACD &&
-		// 		p->OperStatus == IfOperStatusUp &&
-		// 		p->FriendlyName) {
-		// 		storage[0] = wstring_to_utf8_string(p->FriendlyName);
-		// 		result[0] = storage[0].c_str();
-		// 		if (p->DnsSuffix && *p->DnsSuffix) {
-		// 			storage[1] = wstring_to_utf8_string(p->DnsSuffix);
-		// 			result[1] = storage[1].c_str();
-		// 		}
-		// 		break;
-		// 	}
-		// }
-		auto GetMetric = [](const IP_ADAPTER_ADDRESSES* p)
-		{
+		auto GetMetric = [](const IP_ADAPTER_ADDRESSES* p) {
 			ULONG metric = ULONG_MAX;
 			if (p->Ipv4Metric)
 				metric = min(metric, p->Ipv4Metric);
@@ -612,8 +607,7 @@ static std::array<const char*, 2> GetNetworkInfo() {
 		};
 		PIP_ADAPTER_ADDRESSES bestEth = nullptr;
 		PIP_ADAPTER_ADDRESSES bestWifi = nullptr;
-		for (auto p = pAddrs; p; p = p->Next)
-		{
+		for (auto p = pAddrs; p; p = p->Next) {
 			if (p->OperStatus != IfOperStatusUp)
 				continue;
 			switch (p->IfType)
@@ -628,36 +622,32 @@ static std::array<const char*, 2> GetNetworkInfo() {
 				break;
 			}
 		}
-		auto DumpAdapter = [](PIP_ADAPTER_ADDRESSES p)
-		{
+		auto DumpAdapter = [](PIP_ADAPTER_ADDRESSES p) -> NetworkInfo {
 			if (!p)
 				return;
+			NetworkInfo info{};
 			// Adapter GUID
-			std::string adapterGuid = p->AdapterName;
+			info.GUID = p->AdapterName;
 			// Friendly name
-			std::string friendly = wstring_to_utf8_string(p->FriendlyName);
+			info.FName = wstring_to_utf8_string(p->FriendlyName);
 			// Driver description
-			std::string description = wstring_to_utf8_string(p->Description);
+			info.Description = wstring_to_utf8_string(p->Description);
 			// DNS suffix
-			std::string dnsSuffix;
 			if (p->DnsSuffix)
-				dnsSuffix = wstring_to_utf8_string(p->DnsSuffix);
+				info.DNSSuffix = wstring_to_utf8_string(p->DnsSuffix);
 			// MAC
 			std::ostringstream mac;
-			for (ULONG i = 0; i < p->PhysicalAddressLength; ++i)
-			{
-				if (i) mac << ':';
+			for (ULONG i = 0; i < p->PhysicalAddressLength; ++i) {
+				if (i) mac << ':'; // append colon if not first byte
 				mac << std::uppercase
 					<< std::hex
 					<< std::setw(2)
 					<< std::setfill('0')
 					<< static_cast<int>(p->PhysicalAddress[i]);
 			}
-			std::string macAddress = mac.str();
+			info.MAC = mac.str();
 			// DHCPv4 server
-			std::string dhcpServer;
-			if (p->Dhcpv4Server.lpSockaddr)
-			{
+			if (p->Dhcpv4Server.lpSockaddr) {
 				char ip[INET6_ADDRSTRLEN]{};
 				getnameinfo(
 					p->Dhcpv4Server.lpSockaddr,
@@ -667,12 +657,12 @@ static std::array<const char*, 2> GetNetworkInfo() {
 					nullptr,
 					0,
 					NI_NUMERICHOST);
-				dhcpServer = ip;
+				info.PrimaryDHCPv4 = ip;
+			} else {
+				info.PrimaryDHCPv4 = "unknown";
 			}
 			// Primary DNS server
-			std::string dnsServer;
-			if (p->FirstDnsServerAddress)
-			{
+			if (p->FirstDnsServerAddress) {
 				char ip[INET6_ADDRSTRLEN]{};
 				getnameinfo(
 					p->FirstDnsServerAddress->Address.lpSockaddr,
@@ -682,12 +672,12 @@ static std::array<const char*, 2> GetNetworkInfo() {
 					nullptr,
 					0,
 					NI_NUMERICHOST);
-				dnsServer = ip;
+				info.PrimaryDNS = ip;
+			} else {
+				info.PrimaryDNS = "unknown";
 			}
 			// Primary gateway
-			std::string gateway;
-			if (p->FirstGatewayAddress)
-			{
+			if (p->FirstGatewayAddress) {
 				char ip[INET6_ADDRSTRLEN]{};
 				getnameinfo(
 					p->FirstGatewayAddress->Address.lpSockaddr,
@@ -697,14 +687,16 @@ static std::array<const char*, 2> GetNetworkInfo() {
 					nullptr,
 					0,
 					NI_NUMERICHOST);
-				gateway = ip;
+				info.PrimaryGateway = ip;
+			} else {
+				info.PrimaryGateway = "unknown";
 			}
+			return info;
 		};
-		DumpAdapter(bestEth);
-		DumpAdapter(bestWifi);
+		EthernetInfo = DumpAdapter(bestEth);
+		WLANInfo = DumpAdapter(bestWifi);
 	}
-	free(pAddrs);
-	return result;
+	free(pAddrs); // manually free the one thing using malloc
 }
 
 static bool is_unc_available(const char* unc) {
@@ -732,11 +724,14 @@ static inline bool cstr_equal(const char* a, const char* b) {
 	return std::strcmp(a, b) == 0;      // compare contents
 }
 
-// Global initalized string storage
+// Global initalized string storage used by log_change
 struct Store {
 	std::vector<std::string> strings;
 };
 Store storage;
+
+NetworkInfo EthernetInfo;
+NetworkInfo WLANInfo;
 
 // status vars
 bool prev_internet = false;

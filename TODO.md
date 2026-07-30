@@ -33,6 +33,7 @@
    1. -t --times <num>  
       1. only run for <num> rounds  
 10. MAC and local IP address? And total runtime!  
+11. Labels for UNC paths and local mounted drives  
 
 ## Table and checklist  
 
