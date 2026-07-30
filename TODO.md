@@ -27,6 +27,12 @@
      -> msi - use native uninstall, but still just an additional bin.    
      -> manual/standalone - just an extra bin in the install folder  
 7. Auto-resize terminal window  
+8. More envvars  
+   1. USERDNSDOMAIN  
+9. runtime args  
+   1. -t --times <num>  
+      1. only run for <num> rounds  
+10. MAC and local IP address? And total runtime!  
 
 ## Table and checklist  
 

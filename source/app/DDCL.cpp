@@ -574,7 +574,7 @@ static std::vector<bool> resolve_hostname(const std::string& hostname, const std
 	return results;
 }
 
-static std::array<const char*, 2> GetEthernetNetworkInfo() {
+static std::array<const char*, 2> GetNetworkInfo() {
 	static std::string storage[2];  // Static lifetime for returned pointers
 	std::array<const char*, 2> result = { nullptr, nullptr };
 	ULONG bufLen = 15 * 1024;
@@ -588,19 +588,120 @@ static std::array<const char*, 2> GetEthernetNetworkInfo() {
 			nullptr, pAddrs, &bufLen);
 	}
 	if (ret == NO_ERROR) {
-		for (PIP_ADAPTER_ADDRESSES p = pAddrs; p; p = p->Next) {
-			if (p->IfType == IF_TYPE_ETHERNET_CSMACD &&
-				p->OperStatus == IfOperStatusUp &&
-				p->FriendlyName) {
-				storage[0] = wstring_to_utf8_string(p->FriendlyName);
-				result[0] = storage[0].c_str();
-				if (p->DnsSuffix && *p->DnsSuffix) {
-					storage[1] = wstring_to_utf8_string(p->DnsSuffix);
-					result[1] = storage[1].c_str();
-				}
+		// for (PIP_ADAPTER_ADDRESSES p = pAddrs; p; p = p->Next) {
+		// 	if (p->IfType == IF_TYPE_ETHERNET_CSMACD &&
+		// 		p->OperStatus == IfOperStatusUp &&
+		// 		p->FriendlyName) {
+		// 		storage[0] = wstring_to_utf8_string(p->FriendlyName);
+		// 		result[0] = storage[0].c_str();
+		// 		if (p->DnsSuffix && *p->DnsSuffix) {
+		// 			storage[1] = wstring_to_utf8_string(p->DnsSuffix);
+		// 			result[1] = storage[1].c_str();
+		// 		}
+		// 		break;
+		// 	}
+		// }
+		auto GetMetric = [](const IP_ADAPTER_ADDRESSES* p)
+		{
+			ULONG metric = ULONG_MAX;
+			if (p->Ipv4Metric)
+				metric = min(metric, p->Ipv4Metric);
+			if (p->Ipv6Metric)
+				metric = min(metric, p->Ipv6Metric);
+			return metric;
+		};
+		PIP_ADAPTER_ADDRESSES bestEth = nullptr;
+		PIP_ADAPTER_ADDRESSES bestWifi = nullptr;
+		for (auto p = pAddrs; p; p = p->Next)
+		{
+			if (p->OperStatus != IfOperStatusUp)
+				continue;
+			switch (p->IfType)
+			{
+			case IF_TYPE_ETHERNET_CSMACD:
+				if (!bestEth || GetMetric(p) < GetMetric(bestEth))
+					bestEth = p;
+				break;
+			case IF_TYPE_IEEE80211:
+				if (!bestWifi || GetMetric(p) < GetMetric(bestWifi))
+					bestWifi = p;
 				break;
 			}
 		}
+		auto DumpAdapter = [](PIP_ADAPTER_ADDRESSES p)
+		{
+			if (!p)
+				return;
+			// Adapter GUID
+			std::string adapterGuid = p->AdapterName;
+			// Friendly name
+			std::string friendly = wstring_to_utf8_string(p->FriendlyName);
+			// Driver description
+			std::string description = wstring_to_utf8_string(p->Description);
+			// DNS suffix
+			std::string dnsSuffix;
+			if (p->DnsSuffix)
+				dnsSuffix = wstring_to_utf8_string(p->DnsSuffix);
+			// MAC
+			std::ostringstream mac;
+			for (ULONG i = 0; i < p->PhysicalAddressLength; ++i)
+			{
+				if (i) mac << ':';
+				mac << std::uppercase
+					<< std::hex
+					<< std::setw(2)
+					<< std::setfill('0')
+					<< static_cast<int>(p->PhysicalAddress[i]);
+			}
+			std::string macAddress = mac.str();
+			// DHCPv4 server
+			std::string dhcpServer;
+			if (p->Dhcpv4Server.lpSockaddr)
+			{
+				char ip[INET6_ADDRSTRLEN]{};
+				getnameinfo(
+					p->Dhcpv4Server.lpSockaddr,
+					p->Dhcpv4Server.iSockaddrLength,
+					ip,
+					sizeof(ip),
+					nullptr,
+					0,
+					NI_NUMERICHOST);
+				dhcpServer = ip;
+			}
+			// Primary DNS server
+			std::string dnsServer;
+			if (p->FirstDnsServerAddress)
+			{
+				char ip[INET6_ADDRSTRLEN]{};
+				getnameinfo(
+					p->FirstDnsServerAddress->Address.lpSockaddr,
+					p->FirstDnsServerAddress->Address.iSockaddrLength,
+					ip,
+					sizeof(ip),
+					nullptr,
+					0,
+					NI_NUMERICHOST);
+				dnsServer = ip;
+			}
+			// Primary gateway
+			std::string gateway;
+			if (p->FirstGatewayAddress)
+			{
+				char ip[INET6_ADDRSTRLEN]{};
+				getnameinfo(
+					p->FirstGatewayAddress->Address.lpSockaddr,
+					p->FirstGatewayAddress->Address.iSockaddrLength,
+					ip,
+					sizeof(ip),
+					nullptr,
+					0,
+					NI_NUMERICHOST);
+				gateway = ip;
+			}
+		};
+		DumpAdapter(bestEth);
+		DumpAdapter(bestWifi);
 	}
 	free(pAddrs);
 	return result;
@@ -990,9 +1091,9 @@ static void update_status() {
 				}
 			case status_change_type::ethernet:
 				{
-					curr_eth_info = GetEthernetNetworkInfo();
+					curr_eth_info = GetNetworkInfo();
 					if (curr_eth_info.size() != 2) {
-						std::cerr << "GetEthernetNetworkInfo returned unexpected size: " << curr_eth_info.size() << "\n";
+						std::cerr << "GetNetworkInfo returned unexpected size: " << curr_eth_info.size() << "\n";
 						curr_eth_info = { nullptr, nullptr };
 					}
 					else {
