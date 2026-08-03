@@ -575,18 +575,102 @@ static std::vector<bool> resolve_hostname(const std::string& hostname, const std
 }
 
 struct NetworkInfo {
-	// clear default initialization to empty string
-	std::string GUID = "";
-	std::string FName = "";
-	std::string Description = "";
-	std::string DNSSuffix = "";
-	std::string MAC = "";
-	std::string PrimaryDHCPv4 = "";
-	std::string PrimaryDNS = "";
-	std::string PrimaryGateway = "";
+	// default initialization
+	std::string GUID = "N/A";
+	std::string FName = "N/A";
+	std::string Description = "N/A";
+	std::string DNSSuffix = "N/A";
+	std::string MAC = "N/A";
+	std::string PrimaryDHCPv4 = "N/A";
+	std::string PrimaryDNS = "N/A";
+	std::string PrimaryGateway = "N/A";
+
+	bool operator==(const NetworkInfo& other) const {
+        return (
+			GUID == other.GUID &&
+			FName == other.FName &&
+			Description == other.Description &&
+			DNSSuffix == other.DNSSuffix &&
+			MAC == other.MAC &&
+			PrimaryDHCPv4 == other.PrimaryDHCPv4 &&
+			PrimaryDNS == other.PrimaryDNS &&
+			PrimaryGateway == other.PrimaryGateway
+		);
+    }
+
+    bool operator!=(const NetworkInfo& other) const {
+		// slightly more optimal
+        return (
+			GUID != other.GUID ||
+			FName != other.FName ||
+			Description != other.Description ||
+			DNSSuffix != other.DNSSuffix ||
+			MAC != other.MAC ||
+			PrimaryDHCPv4 != other.PrimaryDHCPv4 ||
+			PrimaryDNS != other.PrimaryDNS ||
+			PrimaryGateway != other.PrimaryGateway
+		);
+    }
 };
 
+static bool is_unc_available(const char* unc) {
+	auto future = std::async(std::launch::async, [&]() {
+		DWORD attr = GetFileAttributesA(unc);
+		return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
+		});
+	return (future.wait_for(std::chrono::milliseconds(250)) == std::future_status::ready ? future.get() : false);
+}
+
+static std::filesystem::path get_exe_dir() {
+	// hard to explain beyond that it returns the dir of the executable
+	wchar_t buf[MAX_PATH];
+	DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
+	if (len == 0 || len == MAX_PATH) return std::filesystem::path();
+	std::wstring path(buf, len);
+	std::size_t pos = path.find_last_of(L"\\");
+	path.resize(pos);
+	return std::filesystem::path(path);
+}
+
+static inline bool cstr_equal(const char* a, const char* b) {
+	if (a == b) return true;            // same pointer or both null
+	if (!a || !b) return false;         // one is null, the other not
+	return std::strcmp(a, b) == 0;      // compare contents
+}
+
+// Global initalized string storage used by log_change
+struct Store {
+	std::vector<std::string> strings;
+};
+Store storage;
+
+// status vars
+NetworkInfo prev_EthernetInfo;
+NetworkInfo prev_WLANInfo;
+bool prev_internet = false;
+std::vector<bool> prev_resolve_by_dns(4, false);
+VpnConnection prev_vpn_host;
+std::vector<bool> prev_drives(false);
+std::vector<bool> prev_unc;
+
+NetworkInfo curr_EthernetInfo;
+NetworkInfo curr_WLANInfo;
+bool curr_internet = false;
+std::vector<bool> curr_resolve_by_dns(4, false);
+VpnConnection curr_vpn_host;
+std::vector<bool> curr_drives(false);
+std::vector<bool> curr_unc;
+
+static std::filesystem::path conf_path;
+static std::filesystem::path log_path;
+static NetworkConfig net;
+static DiskConfig disks;
+const char* eth_friendly_name = nullptr;
+static bool use_vt = true;
+static bool vt_enabled = false;
+
 void GetNetworkInfo() {
+	// TODO: make all these strings fallback to "N/A" as a default
 	ULONG bufLen = 15 * 1024;
 	PIP_ADAPTER_ADDRESSES pAddrs = (PIP_ADAPTER_ADDRESSES)malloc(bufLen);
 	DWORD ret = GetAdaptersAddresses(AF_UNSPEC, GAA_FLAG_INCLUDE_PREFIX,
@@ -624,9 +708,10 @@ void GetNetworkInfo() {
 			}
 		}
 		auto DumpAdapter = [](PIP_ADAPTER_ADDRESSES p) -> NetworkInfo {
-			if (!p)
-				return;
 			NetworkInfo info{};
+			if (!p)
+				// shouldnt hit
+				return info;
 			// Adapter GUID
 			info.GUID = p->AdapterName;
 			// Friendly name
@@ -699,67 +784,6 @@ void GetNetworkInfo() {
 	}
 	free(pAddrs); // manually free the one thing using malloc
 }
-
-static bool is_unc_available(const char* unc) {
-	auto future = std::async(std::launch::async, [&]() {
-		DWORD attr = GetFileAttributesA(unc);
-		return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
-		});
-	return (future.wait_for(std::chrono::milliseconds(250)) == std::future_status::ready ? future.get() : false);
-}
-
-static std::filesystem::path get_exe_dir() {
-	// hard to explain beyond that it returns the dir of the executable
-	wchar_t buf[MAX_PATH];
-	DWORD len = GetModuleFileNameW(nullptr, buf, MAX_PATH);
-	if (len == 0 || len == MAX_PATH) return std::filesystem::path();
-	std::wstring path(buf, len);
-	std::size_t pos = path.find_last_of(L"\\");
-	path.resize(pos);
-	return std::filesystem::path(path);
-}
-
-static inline bool cstr_equal(const char* a, const char* b) {
-	if (a == b) return true;            // same pointer or both null
-	if (!a || !b) return false;         // one is null, the other not
-	return std::strcmp(a, b) == 0;      // compare contents
-}
-
-// Global initalized string storage used by log_change
-struct Store {
-	std::vector<std::string> strings;
-};
-Store storage;
-
-
-// status vars
-NetworkInfo prev_EthernetInfo;
-NetworkInfo prev_WLANInfo;
-bool prev_internet = false;
-std::vector<bool> prev_resolve_by_dns(4, false);
-std::string prev_dns_suffix;
-VpnConnection prev_vpn_host;
-std::vector<bool> prev_drives(false);
-std::vector<bool> prev_unc;
-std::array<const char*, 2> prev_eth_info;
-
-NetworkInfo curr_EthernetInfo;
-NetworkInfo curr_WLANInfo;
-bool curr_internet = false;
-std::vector<bool> curr_resolve_by_dns(4, false);
-std::string curr_dns_suffix;
-VpnConnection curr_vpn_host;
-std::vector<bool> curr_drives(false);
-std::vector<bool> curr_unc;
-std::array<const char*, 2> curr_eth_info;
-
-static std::filesystem::path conf_path;
-static std::filesystem::path log_path;
-static NetworkConfig net;
-static DiskConfig disks;
-const char* eth_friendly_name = nullptr;
-static bool use_vt = true;
-static bool vt_enabled = false;
 
 const enum class status_change_type {
 	internet_connectivity,
@@ -900,13 +924,18 @@ static void log_change(const status_change_type diff, std::string time, void* in
 
 		case status_change_type::ethernet: {
 			if (info_copy == nullptr || !info_copy) {
+				// nothing passed, ethernet info change
+				// TODO: pass more update types here.
 				std::ostringstream oss;
-				const char* friendly = curr_eth_info[0] ? curr_eth_info[0] : "N/A";
-				const char* suffix = curr_eth_info[1] ? curr_eth_info[1] : "";
-				oss << time << ",ethernet," << friendly << ";" << suffix << ",";
-				if (curr_dns_suffix != prev_dns_suffix) {
-					oss << "dns_suffix_changed;(" << (!prev_dns_suffix.empty() ? prev_dns_suffix : "N/A") << ":" \
-						<< (!curr_dns_suffix.empty() ? curr_dns_suffix : "N/A") << ")";
+				// assume non-empty strings.
+				const char* friendly = curr_EthernetInfo.FName.c_str();
+				const char* c_suffix = curr_EthernetInfo.DNSSuffix.c_str();
+				const char* p_suffix = prev_EthernetInfo.DNSSuffix.c_str();
+				oss << time << ",ethernet," << friendly << ";" << c_suffix << ",";
+				if ( c_suffix != p_suffix) {
+					// dns suffix
+					oss << "dns_suffix_changed;(" << p_suffix << ":" \
+						<< c_suffix << ")";
 				}
 				else {
 					oss << "connection_status_changed";
@@ -915,15 +944,17 @@ static void log_change(const status_change_type diff, std::string time, void* in
 			}
 			else {
 				const std::string* incoming = _VOIDP__STRING(info_copy);
+				// a string is passed through info field - log it with current info
 				if (incoming) {
 					storage.strings.push_back(*incoming); // borrow some global memory
 					std::ostringstream oss;
-					const char* friendly = curr_eth_info[0] ? curr_eth_info[0] : "N/A";
-					const char* suffix = curr_eth_info[1] ? curr_eth_info[1] : "";
-					oss << time << ",ethernet," << friendly << ";" << suffix << "," << storage.strings.back();
+					const char* friendly = curr_EthernetInfo.FName.empty() ? curr_EthernetInfo.FName.c_str() : "N/A";
+					const char* c_suffix = curr_EthernetInfo.DNSSuffix.empty() ? curr_EthernetInfo.DNSSuffix.c_str() : "N/A";
+					oss << time << ",ethernet," << friendly << ";" << c_suffix << "," << storage.strings.back();
 					write_to_log(oss.str());
 				}
 				else {
+					// failed to fetch string
 					std::ostringstream oss;
 					oss << time << ",ethernet,UNKNOWN,info_unavailable";
 					write_to_log(oss.str());
@@ -1028,7 +1059,8 @@ static void status_check(bool nowrite = false) {
 				}
 				continue;
 			case status_change_type::ethernet:
-				if (!cstr_equal(curr_eth_info[0], prev_eth_info[0]) || curr_dns_suffix != prev_dns_suffix) {
+				// use overloaded op
+				if (curr_EthernetInfo != prev_EthernetInfo) {
 					if (!nowrite) { log_change(status_change_type::ethernet, c_time); }
 				}
 				continue;
@@ -1055,7 +1087,7 @@ static void status_check(bool nowrite = false) {
 		}
 	}
 
-	// store prev_*
+	// reassign prev_*
 	prev_internet = curr_internet;
 	prev_resolve_by_dns = curr_resolve_by_dns;
 	prev_EthernetInfo = curr_EthernetInfo;
@@ -1318,8 +1350,7 @@ static void initialize_runtime() {
 
 	// Initialize curr_ vars to safe defaults to avoid undefined behavior on first update_status() 
 	curr_resolve_by_dns = std::vector<bool>{ false, false, false, false };
-	curr_eth_info		= std::array<const char*, 2>();
-	curr_dns_suffix.clear();
+	//? do not act upon NetworkInfo structs, they have safe defaults and handling in Get NetworkInfo
 	curr_vpn_host		= VpnConnection();
 	curr_drives			= std::vector<bool>(disks.locals.size(), false);
 	curr_unc			= std::vector<bool>(disks.unc.size(), false);
@@ -1327,8 +1358,7 @@ static void initialize_runtime() {
 	// Initialize prev_ vars
 	prev_internet		= false;
 	prev_resolve_by_dns = std::vector<bool>{ false, false, false, false };
-	prev_eth_info		= std::array<const char*, 2>();
-	prev_dns_suffix.clear();
+	//? do not act upon NetworkInfo structs, they have safe defaults and handling in Get NetworkInfo
 	prev_vpn_host		= VpnConnection();
 	if (prev_drives.size() != curr_drives.size() || prev_drives.size() != disks.locals.size()) {
 		prev_drives		= std::vector<bool>(curr_drives.size(), false);
@@ -1494,9 +1524,9 @@ int main(int argc, char* argv[]) {
 				(curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
 			std::cout << BOLD << "Ethernet Adapter Info:\n" << RESET;
 			std::cout << "  " << BOLD << "Friendly Name: " << RESET << (eth_friendly_name ? eth_friendly_name : "N/A") << "\n";
-			std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << (!curr_dns_suffix.empty() ? curr_dns_suffix : "N/A") << "\n";
+			std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() << "\n";
 			std::cout << "  " << BOLD << "Matches Expected Domain: " << RESET << \
-				(!curr_dns_suffix.empty() && net.expected_domain == curr_dns_suffix ? GREEN "YES" : RED "NO") << RESET << "\n";
+				(net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN "YES" : RED "NO") << RESET << "\n";
 			std::cout << BOLD << "VPN Info:\n" << RESET;
 			if (curr_vpn_host.connected) {
 				try {

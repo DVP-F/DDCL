@@ -100,7 +100,7 @@ call "%VC_VARS%" x64
 
 REM Compile runner (DDCL.cpp)
 REM This assumes you have VS installed and it supports compiling C++17
-%CLANG_PATH% /EHsc /std:c++17 /c ..\source\DDCL.cpp /Fo:"runner.obj"
+%CLANG_PATH% /EHsc /std:c++17 /c ..\source\app\DDCL.cpp /Fo:"runner.obj"
 if exist "runner.obj" (
 	REM Compile the resource file - only run if cl compiled properly
 	%RC_PATH% /fo "runner.res" "runner.rc"
@@ -126,7 +126,7 @@ REM Package into an MSI installer
 REM This part is complex and requires the WiX Toolset or equivalent
 
 REM Copy the config file to the output dir
-copy ..\source\conf.toml conf.toml >nul && echo Config file copied to output directory! || echo Failed to copy config file to output directory!
+copy ..\source\app\conf.toml conf.toml >nul && echo Config file copied to output directory! || echo Failed to copy config file to output directory!
 
 REM Make sure to accep the WiX EULA: $ wix eula accept wix7
 
