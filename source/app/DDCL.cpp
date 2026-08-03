@@ -575,14 +575,15 @@ static std::vector<bool> resolve_hostname(const std::string& hostname, const std
 }
 
 struct NetworkInfo {
-	std::string GUID;
-	std::string FName;
-	std::string Description;
-	std::string DNSSuffix;
-	std::string MAC;
-	std::string PrimaryDHCPv4;
-	std::string PrimaryDNS;
-	std::string PrimaryGateway;
+	// clear default initialization to empty string
+	std::string GUID = "";
+	std::string FName = "";
+	std::string Description = "";
+	std::string DNSSuffix = "";
+	std::string MAC = "";
+	std::string PrimaryDHCPv4 = "";
+	std::string PrimaryDNS = "";
+	std::string PrimaryGateway = "";
 };
 
 void GetNetworkInfo() {
@@ -693,8 +694,8 @@ void GetNetworkInfo() {
 			}
 			return info;
 		};
-		EthernetInfo = DumpAdapter(bestEth);
-		WLANInfo = DumpAdapter(bestWifi);
+		curr_EthernetInfo = DumpAdapter(bestEth);
+		curr_WLANInfo = DumpAdapter(bestWifi);
 	}
 	free(pAddrs); // manually free the one thing using malloc
 }
@@ -730,10 +731,10 @@ struct Store {
 };
 Store storage;
 
-NetworkInfo EthernetInfo;
-NetworkInfo WLANInfo;
 
 // status vars
+NetworkInfo prev_EthernetInfo;
+NetworkInfo prev_WLANInfo;
 bool prev_internet = false;
 std::vector<bool> prev_resolve_by_dns(4, false);
 std::string prev_dns_suffix;
@@ -742,6 +743,8 @@ std::vector<bool> prev_drives(false);
 std::vector<bool> prev_unc;
 std::array<const char*, 2> prev_eth_info;
 
+NetworkInfo curr_EthernetInfo;
+NetworkInfo curr_WLANInfo;
 bool curr_internet = false;
 std::vector<bool> curr_resolve_by_dns(4, false);
 std::string curr_dns_suffix;
@@ -1026,9 +1029,7 @@ static void status_check(bool nowrite = false) {
 				continue;
 			case status_change_type::ethernet:
 				if (!cstr_equal(curr_eth_info[0], prev_eth_info[0]) || curr_dns_suffix != prev_dns_suffix) {
-					if (!nowrite) {
-						log_change(status_change_type::ethernet, c_time);
-					}
+					if (!nowrite) { log_change(status_change_type::ethernet, c_time); }
 				}
 				continue;
 			case status_change_type::vpn_connection:
@@ -1057,8 +1058,8 @@ static void status_check(bool nowrite = false) {
 	// store prev_*
 	prev_internet = curr_internet;
 	prev_resolve_by_dns = curr_resolve_by_dns;
-	prev_eth_info = curr_eth_info;
-	prev_dns_suffix = curr_dns_suffix;
+	prev_EthernetInfo = curr_EthernetInfo;
+	prev_WLANInfo = curr_WLANInfo;
 	prev_vpn_host = curr_vpn_host;
 	prev_drives = curr_drives;
 	prev_unc = curr_unc;
@@ -1086,16 +1087,9 @@ static void update_status() {
 				}
 			case status_change_type::ethernet:
 				{
-					curr_eth_info = GetNetworkInfo();
-					if (curr_eth_info.size() != 2) {
-						std::cerr << "GetNetworkInfo returned unexpected size: " << curr_eth_info.size() << "\n";
-						curr_eth_info = { nullptr, nullptr };
-					}
-					else {
-						eth_friendly_name = curr_eth_info[0];
-						curr_dns_suffix = curr_eth_info[1] ? curr_eth_info[1] : std::string();
-					}
-					continue;
+					GetNetworkInfo();
+					// guards and assignment inside function.
+					//! TODO: reassign values for UI?
 				}
 			case status_change_type::vpn_connection:
 				{
