@@ -7,6 +7,7 @@
 #include <cstddef> // apparently my distro doesnt have cstddef, but im compiling on windows for now so idrc
 #include <array>
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <memory>
@@ -23,6 +24,7 @@
 #include "toml.hpp" // https://github.com/marzer/tomlplusplus/blob/v3.4.0/toml.hpp - Copyright (c) Mark Gillard <mark.gillard@outlook.com.au>
 #include <vector>
 #include <future>
+#include <optional>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
@@ -32,6 +34,8 @@
 #include <regex>
 #include <windns.h>
 #include <stdexcept>
+#include <wlanapi.h>
+#include <objbase.h>
 
 #pragma comment(lib, "dnsapi.lib")
 #pragma comment(lib, "rasapi32.lib")
@@ -39,6 +43,8 @@
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "wininet.lib")
 #pragma comment(lib, "user32.lib")
+#pragma comment(lib, "wlanapi.lib")
+#pragma comment(lib, "ole32.lib")
 
 using namespace std;
 
@@ -580,6 +586,12 @@ struct NetworkInfo {
 	std::string FName = "N/A";
 	std::string Description = "N/A";
 	std::string DNSSuffix = "N/A";
+    std::string WSSID = "N/A";
+    std::string WName = "N/A";
+    std::string WBSSID = "N/A";
+    ULONG WSignalQuality = 0;
+    std::string WAuthAlgo = "N/A";
+    std::string WCipherAlgo = "N/A";
 	std::string MAC = "N/A";
 	std::string PrimaryDHCPv4 = "N/A";
 	std::string PrimaryDNS = "N/A";
@@ -659,6 +671,125 @@ static DiskConfig disks;
 static bool use_vt = true;
 static bool vt_enabled = false;
 
+struct WifiConnectionInfo
+{
+    std::string WSSID;
+    std::string WName;
+    std::string WBSSID{};
+    ULONG WSignalQuality = 0;
+    std::string WAuthAlgo;
+    std::string WCipherAlgo;
+};
+
+static std::string AuthAlgoToString(DOT11_AUTH_ALGORITHM algo)
+{
+    switch (algo)
+    {
+    case DOT11_AUTH_ALGO_80211_OPEN:        return "OPEN";
+    case DOT11_AUTH_ALGO_80211_SHARED_KEY:  return "SHARED_KEY";
+    case DOT11_AUTH_ALGO_WPA:               return "WPA";
+    case DOT11_AUTH_ALGO_WPA_PSK:           return "WPA_PSK";
+    case DOT11_AUTH_ALGO_WPA_NONE:          return "WPA_NONE";
+    case DOT11_AUTH_ALGO_RSNA:              return "RSNA";
+    case DOT11_AUTH_ALGO_RSNA_PSK:          return "RSNA_PSK";
+	#ifdef DOT11_AUTH_ALGO_WPA3
+    case DOT11_AUTH_ALGO_WPA3:              return "WPA3";
+	#endif
+	#ifdef DOT11_AUTH_ALGO_WPA3_SAE
+    case DOT11_AUTH_ALGO_WPA3_SAE:          return "WPA3_SAE";
+	#endif
+    default:                                return "UNKNOWN";
+    }
+}
+
+static std::string CipherAlgoToString(DOT11_CIPHER_ALGORITHM algo)
+{
+    switch (algo)
+    {
+    case DOT11_CIPHER_ALGO_NONE:       return "NONE";
+    case DOT11_CIPHER_ALGO_WEP40:      return "WEP40";
+    case DOT11_CIPHER_ALGO_TKIP:       return "TKIP";
+    case DOT11_CIPHER_ALGO_CCMP:       return "CCMP";
+    case DOT11_CIPHER_ALGO_WEP104:     return "WEP104";
+    case DOT11_CIPHER_ALGO_BIP:        return "BIP";
+    case DOT11_CIPHER_ALGO_GCMP:       return "GCMP";
+    case DOT11_CIPHER_ALGO_GCMP_256:   return "GCMP_256";
+    case DOT11_CIPHER_ALGO_CCMP_256:   return "CCMP_256";
+    default:                           return "UNKNOWN";
+    }
+}
+
+std::optional<WifiConnectionInfo> GetWifiConnectionInfo(const IP_ADAPTER_ADDRESSES* adapter) {
+    if (!adapter || adapter->IfType != IF_TYPE_IEEE80211)
+        return std::nullopt;
+    HANDLE hClient = nullptr;
+    DWORD version = 0;
+    if (WlanOpenHandle(2, nullptr, &version, &hClient) != ERROR_SUCCESS)
+        return std::nullopt;
+    PWLAN_INTERFACE_INFO_LIST interfaces = nullptr;
+    if (WlanEnumInterfaces(hClient, nullptr, &interfaces) != ERROR_SUCCESS) {
+        WlanCloseHandle(hClient, nullptr);
+        return std::nullopt;
+    }
+    std::optional<WifiConnectionInfo> result;
+    for (DWORD i = 0; i < interfaces->dwNumberOfItems; i++) {
+        const auto& iface = interfaces->InterfaceInfo[i];
+        if (iface.isState != wlan_interface_state_connected)
+            continue;
+        wchar_t guid[39]{};
+        StringFromGUID2(iface.InterfaceGuid, guid, ARRAYSIZE(guid));
+        if (_wcsicmp(guid, to_wide(adapter->AdapterName).c_str()) != 0)
+            continue;
+        PWLAN_CONNECTION_ATTRIBUTES attrs = nullptr;
+        DWORD size = 0;
+        WLAN_OPCODE_VALUE_TYPE opcodeType;
+        if (WlanQueryInterface(
+                hClient,
+                &iface.InterfaceGuid,
+                wlan_intf_opcode_current_connection,
+                nullptr,
+                &size,
+                reinterpret_cast<PVOID*>(&attrs),
+                &opcodeType)
+			!= ERROR_SUCCESS) {
+            break;
+        }
+        WifiConnectionInfo info{};
+        const auto& assoc = attrs->wlanAssociationAttributes;
+        const auto& sec = attrs->wlanSecurityAttributes;
+        // SSID
+        info.WSSID.assign(
+            reinterpret_cast<const char*>(assoc.dot11Ssid.ucSSID),
+            assoc.dot11Ssid.uSSIDLength);
+        // Profile name
+        info.WName = wstring_to_utf8_string(attrs->strProfileName);
+        // BSSID
+        char bssid[18];
+		sprintf_s(
+			bssid,
+			"%02X:%02X:%02X:%02X:%02X:%02X",
+			assoc.dot11Bssid[0],
+			assoc.dot11Bssid[1],
+			assoc.dot11Bssid[2],
+			assoc.dot11Bssid[3],
+			assoc.dot11Bssid[4],
+			assoc.dot11Bssid[5]);
+		info.WBSSID = bssid;
+        // Signal
+        info.WSignalQuality = assoc.wlanSignalQuality;
+        // Security
+        info.WAuthAlgo = AuthAlgoToString(sec.dot11AuthAlgorithm);
+		info.WCipherAlgo = CipherAlgoToString(sec.dot11CipherAlgorithm);
+        result = std::move(info);
+        WlanFreeMemory(attrs);
+        break;
+    }
+    if (interfaces)
+        WlanFreeMemory(interfaces);
+    WlanCloseHandle(hClient, nullptr);
+    return result;
+}
+
 void GetNetworkInfo() {
 	ULONG bufLen = 15 * 1024;
 	PIP_ADAPTER_ADDRESSES pAddrs = (PIP_ADAPTER_ADDRESSES)malloc(bufLen);
@@ -677,10 +808,30 @@ void GetNetworkInfo() {
 				metric = min(metric, p->Ipv6Metric);
 			return metric;
 		};
+		auto IsCandidate = [](const IP_ADAPTER_ADDRESSES* p) {
+			// has to be UP
+			if (p->OperStatus != IfOperStatusUp)
+				return false;
+			// no loopbacks
+			if (p->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
+				return false;
+			// Ignore tunnel adapters (Teredo, ISATAP, 6to4, etc.)
+			if (p->TunnelType != TUNNEL_TYPE_NONE)
+				return false;
+			// not virtual or ms wifi direct
+			if (p->Description) {
+				std::wstring_view name{ p->Description };
+				if (name.find(L"Wi-Fi Direct") != std::wstring_view::npos)
+					return false;
+				if (name.find(L"Virtual") != std::wstring_view::npos)
+					return false;
+			}
+			return true;
+		};
 		PIP_ADAPTER_ADDRESSES bestEth = nullptr;
 		PIP_ADAPTER_ADDRESSES bestWifi = nullptr;
 		for (auto p = pAddrs; p; p = p->Next) {
-			if (p->OperStatus != IfOperStatusUp)
+			if (!IsCandidate(p))
 				continue;
 			switch (p->IfType)
 			{
@@ -765,20 +916,42 @@ void GetNetworkInfo() {
 			} else {
 				info.PrimaryDNS = "N/A";
 			}
-			// Primary gateway
+			// Primary gateway (walking the list until valid entry)
 			if (p->FirstGatewayAddress) {
-				char ip[INET6_ADDRSTRLEN]{};
-				getnameinfo(
-					p->FirstGatewayAddress->Address.lpSockaddr,
-					p->FirstGatewayAddress->Address.iSockaddrLength,
-					ip,
-					sizeof(ip),
-					nullptr,
-					0,
-					NI_NUMERICHOST);
-				info.PrimaryGateway = ip;
-			} else {
+				bool found = false;
+				for (auto* gw = p->FirstGatewayAddress; gw; gw = gw->Next) {
+					char ip[INET6_ADDRSTRLEN]{};
+					if (getnameinfo(
+							gw->Address.lpSockaddr,
+							gw->Address.iSockaddrLength,
+							ip,
+							sizeof(ip),
+							nullptr,
+							0,
+							NI_NUMERICHOST) == 0)
+					{
+						info.PrimaryGateway = ip;
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					info.PrimaryGateway = "N/A";
+			}
+			else {
 				info.PrimaryGateway = "N/A";
+			}
+			if (p->IfType == IF_TYPE_IEEE80211) {
+				// get wifi info
+				auto winfo = GetWifiConnectionInfo(p);
+				// and reassign it
+				// TODO: make this safer
+				info.WSSID = winfo->WSSID;
+				info.WName = winfo->WName;
+				info.WBSSID = winfo->WBSSID;
+				info.WSignalQuality = winfo->WSignalQuality;
+				info.WAuthAlgo = winfo->WAuthAlgo;
+				info.WCipherAlgo = winfo->WCipherAlgo;
 			}
 			return info;
 		};
@@ -1636,9 +1809,25 @@ int main(int argc, char* argv[]) {
 			std::cout << BOLD << "Ethernet Adapter Info:\n" << RESET;
 			std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << "\n";
 			std::cout << "  " << BOLD << "Description:   " << RESET << curr_EthernetInfo.Description.c_str() << "\n";
-			std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() << "\n";
-			std::cout << "  " << BOLD << "Matches Expected Domain: " << RESET << \
-				(net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN "YES" : RED "NO") << RESET << "\n";
+			std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() \
+				<< (net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN " MATCH" : RED " NO MATCH") << RESET "\n";
+			std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_EthernetInfo.MAC.c_str() << "\n";
+			std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_EthernetInfo.PrimaryDHCPv4.c_str() << "\n";
+			std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_EthernetInfo.PrimaryDNS.c_str() << "\n";
+			std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_EthernetInfo.PrimaryGateway.c_str() << "\n";
+			std::cout << BOLD << "WLAN Adapter Info:\n" << RESET;
+			std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_WLANInfo.FName.c_str() << "\n";
+			std::cout << "  " << BOLD << "Description:   " << RESET << curr_WLANInfo.Description.c_str() << "\n";
+			std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_WLANInfo.MAC.c_str() << "\n";
+			std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_WLANInfo.PrimaryDHCPv4.c_str() << "\n";
+			std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_WLANInfo.PrimaryDNS.c_str() << "\n";
+			std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_WLANInfo.PrimaryGateway.c_str() << "\n";
+			std::cout << "  " << BOLD << "SSID:          " << RESET << curr_WLANInfo.WSSID.c_str() << "\n";
+			std::cout << "  " << BOLD << "BSSID:         " << RESET << curr_WLANInfo.WBSSID.c_str() << "\n";
+			std::cout << "  " << BOLD << "Network Name:  " << RESET << curr_WLANInfo.WName.c_str() << "\n";
+			std::cout << "  " << BOLD << "Signal:        " << RESET << curr_WLANInfo.WSignalQuality << "\n";
+			std::cout << "  " << BOLD << "Auth Algo:     " << RESET << curr_WLANInfo.WAuthAlgo << "\n";
+			std::cout << "  " << BOLD << "Cipher Algo:   " << RESET << curr_WLANInfo.WCipherAlgo << "\n";
 			std::cout << BOLD << "VPN Info:\n" << RESET;
 			if (curr_vpn_host.connected) {
 				try {
@@ -1679,6 +1868,7 @@ int main(int argc, char* argv[]) {
 			std::cout << BLUE << "Log path: " << log_path.string().c_str() << "\n" << RESET << std::endl;
 
 			// update window size
+			// TODO: make this work ffs
 			if (linecount < current_size) {
 				ResizeConsoleHeight(linecount);
 			}
