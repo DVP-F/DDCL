@@ -691,6 +691,10 @@ std::vector<bool> curr_drives(false);
 std::vector<bool> curr_unc;
 
 SessionInfo session;
+uint64_t runCounter = 0;
+
+// config vars
+bool firstRun = true;
 static std::filesystem::path conf_path;
 static std::filesystem::path log_path;
 static NetworkConfig net;
@@ -1189,11 +1193,27 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				const char* p_dns = prev_EthernetInfo.PrimaryDNS.c_str();
 				const char* c_gateway = curr_EthernetInfo.PrimaryGateway.c_str();
 				const char* p_gateway = prev_EthernetInfo.PrimaryGateway.c_str();
-				oss << time << ",ethernet," << friendly << ";" << c_suffix << ",";
-				if ( c_suffix != p_suffix) {
-					// dns suffix
-					oss << "dns_suffix_change;(" << p_suffix << ":" << c_suffix << ")";
-				} else if (c_guid != p_guid || c_mac != p_mac) {
+				if (firstRun) {
+					// eight used fields for ethernet info
+					oss << time << ",ethernet," ;
+					if (curr_EthernetInfo.GUID != "N/A") {
+						oss << "GUID:" << c_guid << ";" \
+						<< "FriendlyName:'" << friendly << "';" \
+						<< "Description:'" << curr_EthernetInfo.Description << "';" \
+						<< "DNSSuffix:" << c_suffix << ";" \
+						<< "MAC:'" << c_mac << "';" \
+						<< "PrimaryDHCPv4:" << c_dhcp << ";" \
+						<< "PrimaryDNS:" << c_dns << ";" \
+						<< "PrimaryGateway:" << c_gateway << "," ;
+					} else {
+						oss << "no_connection," ;
+					}
+					write_to_log(oss.str());
+					break; // stop processing since its first run
+				} else {
+					oss << time << ",ethernet," << friendly << ";" << c_suffix << ",";
+				}
+				if (c_guid != p_guid || c_mac != p_mac) {
 					// adapter changed
 					//* log changed guid, fname, desc., mac
 					oss << "adapter_change;(['" \
@@ -1201,6 +1221,9 @@ static void log_change(const status_change_type diff, std::string time, void* in
 					<< prev_EthernetInfo.FName << "';" << p_guid << ";" << p_mac << ";" << prev_EthernetInfo.Description \
 					// new info
 					<< "]:['" << friendly << "';" << c_guid << ";" << c_mac << ";" << curr_EthernetInfo.Description << "])";
+				} else if ( c_suffix != p_suffix) {
+					// dns suffix
+					oss << "dns_suffix_change;(" << p_suffix << ":" << c_suffix << ")";
 				} else if (c_dhcp != p_dhcp) {
 					// changed dhcp server
 					oss << "dhcp_server_change;(" << p_dhcp << ":" << c_dhcp << ")";
@@ -1214,6 +1237,7 @@ static void log_change(const status_change_type diff, std::string time, void* in
 					// generic unknown change
 					oss << "unknow_change;possible:[connection_status]";
 				}
+				oss << ",";
 				write_to_log(oss.str());
 			}
 			else {
@@ -1256,11 +1280,33 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				const char* p_dns = prev_WLANInfo.PrimaryDNS.c_str();
 				const char* c_gateway = curr_WLANInfo.PrimaryGateway.c_str();
 				const char* p_gateway = prev_WLANInfo.PrimaryGateway.c_str();
-				oss << time << ",wlan," << friendly << ";" << c_suffix << ",";
-				if ( c_suffix != p_suffix) {
-					// dns suffix
-					oss << "dns_suffix_change;(" << p_suffix << ":" << c_suffix << ")";
-				} else if (c_guid != p_guid || c_mac != p_mac) {
+				if (firstRun) {
+					// every field is used for wlan
+					oss << time << ",wlan,";
+					if (curr_WLANInfo.GUID != "N/A") {
+						oss << "GUID:" << c_guid << ";" \
+						<< "FriendlyName:'" << friendly << "';" \
+						<< "Description:'" << curr_WLANInfo.Description << "';" \
+						<< "DNSSuffix:" << c_suffix << ";" \
+						<< "SSID:'" << curr_WLANInfo.WSSID << "';" \
+						<< "Name:'" << curr_WLANInfo.WName << "';" \
+						<< "BSSID:" << curr_WLANInfo.WBSSID << ";" \
+						<< "SignalQuality:" << curr_WLANInfo.WSignalQuality << ";" \
+						<< "AuthAlgo:" << curr_WLANInfo.WAuthAlgo << ";" \
+						<< "CipherAlgo:" << curr_WLANInfo.WCipherAlgo << ";" \
+						<< "MAC:'" << c_mac << "';" \
+						<< "PrimaryDHCPv4:" << c_dhcp << ";" \
+						<< "PrimaryDNS:" << c_dns << ";" \
+						<< "PrimaryGateway:" << c_gateway << "," ;
+					} else {
+						oss << "no_connection," ;
+					}
+					write_to_log(oss.str());
+					break; // stop processing since its first run
+				} else {
+					oss << time << ",wlan," << friendly << ";" << c_suffix << ",";
+				}
+				if (c_guid != p_guid || c_mac != p_mac) {
 					// adapter changed
 					//* log changed guid, fname, desc., mac
 					oss << "adapter_change;(['" \
@@ -1268,6 +1314,9 @@ static void log_change(const status_change_type diff, std::string time, void* in
 					<< prev_WLANInfo.FName << "';" << p_guid << ";" << p_mac << ";" << prev_WLANInfo.Description \
 					// new info
 					<< "]:['" << friendly << "';" << c_guid << ";" << c_mac << ";" << curr_WLANInfo.Description << "])";
+				} else if ( c_suffix != p_suffix) {
+					// dns suffix
+					oss << "dns_suffix_change;(" << p_suffix << ":" << c_suffix << ")";
 				} else if (c_dhcp != p_dhcp) {
 					// changed dhcp server
 					oss << "dhcp_server_change;(" << p_dhcp << ":" << c_dhcp << ")";
@@ -1281,6 +1330,7 @@ static void log_change(const status_change_type diff, std::string time, void* in
 					// generic unknown change
 					oss << "unknow_change;possible:[connection_status]";
 				}
+				oss << ",";
 				write_to_log(oss.str());
 			}
 			else {
@@ -1307,19 +1357,19 @@ static void log_change(const status_change_type diff, std::string time, void* in
 		case status_change_type::dns_resolution: {
 			std::ostringstream oss;
 			oss << time << ",dns_resolution,"
-				<< net.check << ":sys_dns" << (curr_resolve_by_dns[0] ? ";True " : ";False ")
-				<< net.check << ":" << net.dns << (curr_resolve_by_dns[1] ? ";True " : ";False ")
-				<< "www.wikipedia.org" << ":sys_dns" << (curr_resolve_by_dns[2] ? ";True " : ";False ")
-				<< "www.wikipedia.org" << ":" << net.dns << (curr_resolve_by_dns[3] ? ";True" : ";False");
+				<< net.check << ":[sys_dns:" << (curr_resolve_by_dns[0] ? "True;" : "False;") \
+				<< net.dns << (curr_resolve_by_dns[1] ? ":True" : ":False") \
+				<< "];www.wikipedia.org:[sys_dns:" << (curr_resolve_by_dns[2] ? "True;" : "False;") \
+				<< net.dns << (curr_resolve_by_dns[3] ? ":True" : ":False") << "]," ;
 			write_to_log(oss.str());
 			break;
 		}
 
 		case status_change_type::vpn_connection: {
 			std::ostringstream oss;
-			oss << time << ",vpn_connection,"
-				<< (curr_vpn_host.connected ? "connected:" + curr_vpn_host.name + ";" + curr_vpn_host.hostname : "not_connected")
-				<< ":l_ip:" << (curr_vpn_host.connected ? curr_vpn_host.local_ip : "N/A");
+			oss << time << ",vpn_connection," << (curr_vpn_host.connected
+				? "connected," + curr_vpn_host.name + ";" + curr_vpn_host.hostname + ";" + curr_vpn_host.local_ip
+				: "not_connected,") ;
 			write_to_log(oss.str());
 			break;
 		}
@@ -1572,6 +1622,9 @@ static std::size_t initial_status_write() {
 				continue;
 		}
 	}
+	// register the initial run
+	firstRun = false;
+	runCounter++;
 	return std::size_t(1); // to ensure this actually completes before the main loop starts
 }
 
