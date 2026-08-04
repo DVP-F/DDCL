@@ -70,7 +70,7 @@
 | Redo (un)install         | Update msi script                           |       |
 | Redo (un)install         | Update packaging scripts                    |       |
 | TUI                      | Auto-resize window size                     |       |
-| Data update TODOs        | Line 1094 + 590 TODO                        |       |
+| Data update TODOs        | Line 1094 + 590 TODO                        |   X   |
 
 ADD reg write from msi 'InstallType' and use to direct (un)install instead of args
 

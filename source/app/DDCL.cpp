@@ -1161,8 +1161,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 	// We make an internal copy into `storage.strings`
 	void* info_copy = info;
 
-	// TODO: have this log a more complete initial status.
-
 	// These are going to be a bit monolithic but relatively straightforward
 	// The given status_change_type determines the formatting of the log entry, 
 	// for which the relevant info is already known - this just translates a lot of information into simple strings for logging.
