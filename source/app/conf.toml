@@ -10,6 +10,7 @@ use_virtual_terminal = true
 detections = [
     "Internet",
     "Ethernet",
+	"WLAN",
     "DNS resolution",
     "VPN",
     "Disks",
