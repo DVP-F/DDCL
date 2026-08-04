@@ -1882,8 +1882,8 @@ int main(int argc, char* argv[]) {
 			if (curr_EthernetInfo.GUID != "N/A") {
 				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << "\n";
 				std::cout << "  " << BOLD << "Description:   " << RESET << curr_EthernetInfo.Description.c_str() << "\n";
-				std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() \
-					<< (net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN " MATCH" : RED " NO MATCH") << RESET "\n";
+				std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() << "{" \
+					<< (net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN " MATCH" : RED " NO MATCH") << RESET "}\n";
 				std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_EthernetInfo.MAC.c_str() << "\n";
 				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_EthernetInfo.PrimaryDHCPv4.c_str() << "\n";
 				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_EthernetInfo.PrimaryDNS.c_str() << "\n";
@@ -1914,8 +1914,8 @@ int main(int argc, char* argv[]) {
 					std::cout << "  " << BOLD << "Name:     " << RESET << curr_vpn_host.name << "\n";
 					std::cout << "  " << BOLD << "Hostname: " << RESET << curr_vpn_host.hostname \
 					<< RESET "{" << ((!net.expected_vpn_hostname.empty() && 
-						std::regex_match(curr_vpn_host.hostname, std::regex(net.expected_vpn_hostname, std::regex_constants::icase))) ? 
-						GREEN "MATCH" : RED "NO") << "}\n";
+						std::regex_match(curr_vpn_host.hostname, std::regex(net.expected_vpn_hostname, std::regex_constants::icase)))
+						? GREEN "MATCH" : RED "NO MATCH") << "}\n";
 					std::cout << "  " << BOLD << "Local IP: " << RESET << curr_vpn_host.local_ip << "\n";
 					linecount += 4;
 				}
