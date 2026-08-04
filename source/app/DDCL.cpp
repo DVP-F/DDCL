@@ -137,6 +137,7 @@ use_virtual_terminal = true
 detections = [
 	"Internet",
 	"Ethernet",
+	"WLAN",
 	"DNS resolution",
 	"VPN",
 	"Disks",
@@ -1156,6 +1157,8 @@ static void log_change(const status_change_type diff, std::string time, void* in
 	// We make an internal copy into `storage.strings`
 	void* info_copy = info;
 
+	// TODO: have this log a more complete initial status.
+
 	// These are going to be a bit monolithic but relatively straightforward
 	// The given status_change_type determines the formatting of the log entry, 
 	// for which the relevant info is already known - this just translates a lot of information into simple strings for logging.
@@ -1236,7 +1239,7 @@ static void log_change(const status_change_type diff, std::string time, void* in
 
 		case status_change_type::wlan: {
 			if (info_copy == nullptr || !info_copy) {
-				// nothing passed, ethernet info change
+				// nothing passed, wlan info change
 				// TODO: remove multiple uses of oss. clean up
 				std::ostringstream oss;
 				// safely assume non-empty strings
@@ -1316,7 +1319,7 @@ static void log_change(const status_change_type diff, std::string time, void* in
 			std::ostringstream oss;
 			oss << time << ",vpn_connection,"
 				<< (curr_vpn_host.connected ? "connected:" + curr_vpn_host.name + ";" + curr_vpn_host.hostname : "not_connected")
-				<< " l_ip:" << (curr_vpn_host.connected ? curr_vpn_host.local_ip : "N/A");
+				<< ":l_ip:" << (curr_vpn_host.connected ? curr_vpn_host.local_ip : "N/A");
 			write_to_log(oss.str());
 			break;
 		}
@@ -1515,28 +1518,27 @@ static std::size_t initial_status_write() {
 	for (const auto& kind : detection_kinds) {
 		switch (kind) {
 			case status_change_type::internet_connectivity:
-				det_str.append("internet_connectivity");
+				det_str.append("internet_connectivity;");
 				continue;
 			case status_change_type::ethernet:
-				det_str.append("ethernet");
+				det_str.append("ethernet;");
 				continue;
 			case status_change_type::wlan:
-				det_str.append("wlan");
+				det_str.append("wlan;");
 				continue;
 			case status_change_type::dns_resolution:
-				det_str.append("dns_resolution");
+				det_str.append("dns_resolution;");
 				continue;
 			case status_change_type::vpn_connection:
-				det_str.append("vpn_connection");
+				det_str.append("vpn_connection;");
 				continue;
 			case status_change_type::drive_availability:
-				det_str.append("drive_availability");
+				det_str.append("drive_availability;");
 				continue;
 			case status_change_type::unc_availability:
-				det_str.append("unc_availability");
+				det_str.append("unc_availability;");
 				continue;
 		}
-		det_str.append(";");
 	}
 	if (det_str.back()==';') {det_str.pop_back();}; det_str.append(",initial_status");
 	write_to_log(det_str);
