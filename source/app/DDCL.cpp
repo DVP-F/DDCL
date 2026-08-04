@@ -4,6 +4,8 @@
 // - GitHub: https://github.com/DVP-F/DDCL 
 // See `NOTICE.txt` for further Licensing information
 
+#define WIN32_LEAN_AND_MEAN
+
 #include <cstddef> // apparently my distro doesnt have cstddef, but im compiling on windows for now so idrc
 #include <array>
 #include <atomic>
@@ -20,10 +22,15 @@
 #include <locale>
 #include <sstream>
 #include <string>
+#include <userenv.h>
 #include <thread>
 #include "toml.hpp" // https://github.com/marzer/tomlplusplus/blob/v3.4.0/toml.hpp - Copyright (c) Mark Gillard <mark.gillard@outlook.com.au>
 #include <vector>
 #include <future>
+#include <wlanapi.h>
+#include <objbase.h>
+#include <wtsapi32.h>
+#include <Lmcons.h>
 #include <optional>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -34,17 +41,17 @@
 #include <regex>
 #include <windns.h>
 #include <stdexcept>
-#include <wlanapi.h>
-#include <objbase.h>
 
+
+#pragma comment(lib, "user32.lib")
+#pragma comment(lib, "wlanapi.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "Wtsapi32.lib")
 #pragma comment(lib, "dnsapi.lib")
 #pragma comment(lib, "rasapi32.lib")
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "wininet.lib")
-#pragma comment(lib, "user32.lib")
-#pragma comment(lib, "wlanapi.lib")
-#pragma comment(lib, "ole32.lib")
 
 using namespace std;
 
@@ -616,6 +623,24 @@ struct NetworkInfo {
     }
 };
 
+struct SessionInfo {
+    std::string user = "N/A";
+    std::string domain = "N/A";
+    DWORD sessionId = 0;
+	DWORD loggedInCount = 0;
+	std::string hostname = "N/A";
+	ULONGLONG upTimeSec = 0;
+};
+
+struct WifiConnectionInfo {
+    std::string WSSID;
+    std::string WName;
+    std::string WBSSID{};
+    ULONG WSignalQuality = 0;
+    std::string WAuthAlgo;
+    std::string WCipherAlgo;
+};
+
 static bool is_unc_available(const char* unc) {
 	auto future = std::async(std::launch::async, [&]() {
 		DWORD attr = GetFileAttributesA(unc);
@@ -664,6 +689,7 @@ VpnConnection curr_vpn_host;
 std::vector<bool> curr_drives(false);
 std::vector<bool> curr_unc;
 
+SessionInfo session;
 static std::filesystem::path conf_path;
 static std::filesystem::path log_path;
 static NetworkConfig net;
@@ -671,17 +697,7 @@ static DiskConfig disks;
 static bool use_vt = true;
 static bool vt_enabled = false;
 
-struct WifiConnectionInfo {
-    std::string WSSID;
-    std::string WName;
-    std::string WBSSID{};
-    ULONG WSignalQuality = 0;
-    std::string WAuthAlgo;
-    std::string WCipherAlgo;
-};
-
-static std::string AuthAlgoToString(DOT11_AUTH_ALGORITHM algo)
-{
+static std::string AuthAlgoToString(DOT11_AUTH_ALGORITHM algo) {
     switch (algo)
     {
     case DOT11_AUTH_ALGO_80211_OPEN:        return "OPEN";
@@ -701,8 +717,7 @@ static std::string AuthAlgoToString(DOT11_AUTH_ALGORITHM algo)
     }
 }
 
-static std::string CipherAlgoToString(DOT11_CIPHER_ALGORITHM algo)
-{
+static std::string CipherAlgoToString(DOT11_CIPHER_ALGORITHM algo) {
     switch (algo)
     {
     case DOT11_CIPHER_ALGO_NONE:       return "NONE";
@@ -945,12 +960,12 @@ void GetNetworkInfo() {
 				auto winfo = GetWifiConnectionInfo(p);
 				// and reassign it
 				if (winfo) {
-					info.WSSID          = winfo->WSSID.empty() ?       winfo->WSSID :         "N/A";
-					info.WName          = winfo->WName.empty() ?       winfo->WName :         "N/A";
-					info.WBSSID         = winfo->WBSSID.empty() ?      winfo->WBSSID :        "N/A";
-					info.WSignalQuality = winfo->WSignalQuality ?      winfo->WSignalQuality : 0;
-					info.WAuthAlgo      = winfo->WAuthAlgo.empty() ?   winfo->WAuthAlgo :     "N/A";
-					info.WCipherAlgo    = winfo->WCipherAlgo.empty() ? winfo->WCipherAlgo :   "N/A";
+					info.WSSID          = !winfo->WSSID.empty() ?       winfo->WSSID :         "N/A";
+					info.WName          = !winfo->WName.empty() ?       winfo->WName :         "N/A";
+					info.WBSSID         = !winfo->WBSSID.empty() ?      winfo->WBSSID :        "N/A";
+					info.WSignalQuality =  winfo->WSignalQuality ?      winfo->WSignalQuality : 0;
+					info.WAuthAlgo      = !winfo->WAuthAlgo.empty() ?   winfo->WAuthAlgo :     "N/A";
+					info.WCipherAlgo    = !winfo->WCipherAlgo.empty() ? winfo->WCipherAlgo :   "N/A";
 				}
 			}
 			return info;
@@ -959,6 +974,58 @@ void GetNetworkInfo() {
 		curr_WLANInfo = DumpAdapter(bestWifi);
 	}
 	free(pAddrs); // manually free the one thing using malloc
+}
+
+std::wstring QueryWtsString(DWORD sessionId, WTS_INFO_CLASS infoClass) {
+    LPWSTR buffer = nullptr;
+    DWORD bytes = 0;
+    std::wstring result;
+    if (WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, sessionId, infoClass, &buffer, &bytes) && buffer) {
+        result = buffer;
+        WTSFreeMemory(buffer);
+    }
+    return result;
+}
+
+static ULONGLONG uptime() { return GetTickCount64() / 1000; }
+
+static SessionInfo getLocalSessionInfo(bool firstRun = false) {
+	SessionInfo activeUser;
+	//* only query session info once at runtime
+	if (firstRun) {
+		wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1] = {};
+		DWORD computerLen = MAX_COMPUTERNAME_LENGTH + 1;
+		if (GetComputerNameW(computerName, &computerLen)) {
+			activeUser.hostname = wstring_to_utf8_string(computerName);
+		} else {
+			activeUser.hostname = "N/A";
+		}
+		DWORD activeSessionId = WTSGetActiveConsoleSessionId();
+		PWTS_SESSION_INFOW sessions = nullptr;
+		DWORD sessionCount = 0;
+		DWORD loggedInCount = 0;
+		if (WTSEnumerateSessionsW(WTS_CURRENT_SERVER_HANDLE, 0, 1, &sessions, &sessionCount)) {
+			for (DWORD i = 0; i < sessionCount; ++i) {
+				DWORD sid = sessions[i].SessionId;
+				std::wstring user = QueryWtsString(sid, WTSUserName);
+				std::wstring domain = QueryWtsString(sid, WTSDomainName);
+				if (!user.empty()) {
+					++loggedInCount;
+					if (sid == activeSessionId) { // || sessions[i].State == WTSActive //? grab active console user, idc about interactive
+						activeUser.user = !user.empty() ? wstring_to_utf8_string(user.c_str()) : "N/A";
+						activeUser.domain = !domain.empty() ? wstring_to_utf8_string(domain.c_str()) : "N/A";
+						activeUser.sessionId = sid? sid : 0;
+					}
+				}
+			}
+			WTSFreeMemory(sessions);
+		}
+		activeUser.loggedInCount = loggedInCount; //
+	} else {
+		activeUser.upTimeSec = uptime(); // both guar to be real initialized nums
+	}
+	// bc of default values this is a safe return
+	return activeUser;
 }
 
 const enum class status_change_type {
@@ -1427,6 +1494,8 @@ static void update_status() {
 				}
 		}
 	}
+	// update uptime
+	session.upTimeSec = getLocalSessionInfo().upTimeSec;
 }
 
 static std::size_t initial_status_write() {
@@ -1435,6 +1504,9 @@ static std::size_t initial_status_write() {
 	const std::string c_time = get_timestamp();
 	write_to_log("timestamp,kind,value,info"); // CSV header
 	Sleep(250); // Ensure log file is created before writing initial status (and avoid potential race conditions) 
+
+	// next grab initial session info
+	session = getLocalSessionInfo(true);
 
 	// Log the registered detection kinds!
 	std::string det_str = "";
@@ -1807,37 +1879,44 @@ int main(int argc, char* argv[]) {
 			std::cout << "    " << net.dns << ": " << \
 				(curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
 			std::cout << BOLD << "Ethernet Adapter Info:\n" << RESET;
-			std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << "\n";
-			std::cout << "  " << BOLD << "Description:   " << RESET << curr_EthernetInfo.Description.c_str() << "\n";
-			std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() \
-				<< (net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN " MATCH" : RED " NO MATCH") << RESET "\n";
-			std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_EthernetInfo.MAC.c_str() << "\n";
-			std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_EthernetInfo.PrimaryDHCPv4.c_str() << "\n";
-			std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_EthernetInfo.PrimaryDNS.c_str() << "\n";
-			std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_EthernetInfo.PrimaryGateway.c_str() << "\n";
+			if (curr_EthernetInfo.GUID != "N/A") {
+				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << "\n";
+				std::cout << "  " << BOLD << "Description:   " << RESET << curr_EthernetInfo.Description.c_str() << "\n";
+				std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() \
+					<< (net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN " MATCH" : RED " NO MATCH") << RESET "\n";
+				std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_EthernetInfo.MAC.c_str() << "\n";
+				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_EthernetInfo.PrimaryDHCPv4.c_str() << "\n";
+				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_EthernetInfo.PrimaryDNS.c_str() << "\n";
+				std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_EthernetInfo.PrimaryGateway.c_str() << "\n";
+			} else {
+				std::cout << "  " << BOLD << "No Ethernet connections detected!\n" << RESET ;
+			}
 			std::cout << BOLD << "WLAN Adapter Info:\n" << RESET;
-			std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_WLANInfo.FName.c_str() << "\n";
-			std::cout << "  " << BOLD << "Description:   " << RESET << curr_WLANInfo.Description.c_str() << "\n";
-			std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_WLANInfo.MAC.c_str() << "\n";
-			std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_WLANInfo.PrimaryDHCPv4.c_str() << "\n";
-			std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_WLANInfo.PrimaryDNS.c_str() << "\n";
-			std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_WLANInfo.PrimaryGateway.c_str() << "\n";
-			std::cout << "  " << BOLD << "SSID:          " << RESET << curr_WLANInfo.WSSID.c_str() << "\n";
-			std::cout << "  " << BOLD << "BSSID:         " << RESET << curr_WLANInfo.WBSSID.c_str() << "\n";
-			std::cout << "  " << BOLD << "Network Name:  " << RESET << curr_WLANInfo.WName.c_str() << "\n";
-			std::cout << "  " << BOLD << "Signal:        " << RESET << curr_WLANInfo.WSignalQuality << "\n";
-			std::cout << "  " << BOLD << "Auth Algo:     " << RESET << curr_WLANInfo.WAuthAlgo << "\n";
-			std::cout << "  " << BOLD << "Cipher Algo:   " << RESET << curr_WLANInfo.WCipherAlgo << "\n";
+			if (curr_WLANInfo.GUID != "N/A") { // check guid to know if its connected
+				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_WLANInfo.FName.c_str() << "\n";
+				std::cout << "  " << BOLD << "Description:   " << RESET << curr_WLANInfo.Description.c_str() << "\n";
+				std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_WLANInfo.MAC.c_str() << "\n";
+				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_WLANInfo.PrimaryDHCPv4.c_str() << "\n";
+				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_WLANInfo.PrimaryDNS.c_str() << "\n";
+				std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_WLANInfo.PrimaryGateway.c_str() << "\n";
+				std::cout << "  " << BOLD << "SSID:          " << RESET << curr_WLANInfo.WSSID.c_str() << "\n";
+				std::cout << "  " << BOLD << "BSSID:         " << RESET << curr_WLANInfo.WBSSID.c_str() << "\n";
+				std::cout << "  " << BOLD << "Network Name:  " << RESET << curr_WLANInfo.WName.c_str() << "\n";
+				std::cout << "  " << BOLD << "Signal:        " << RESET << curr_WLANInfo.WSignalQuality << "\n";
+				std::cout << "  " << BOLD << "Auth Algo:     " << RESET << curr_WLANInfo.WAuthAlgo << "\n";
+				std::cout << "  " << BOLD << "Cipher Algo:   " << RESET << curr_WLANInfo.WCipherAlgo << "\n";
+			} else {
+				std::cout << "  " << BOLD << "Not connected!\n" << RESET ;
+			}
 			std::cout << BOLD << "VPN Info:\n" << RESET;
 			if (curr_vpn_host.connected) {
 				try {
-					std::cout << "  " << BOLD << "VPN Name: " << RESET << curr_vpn_host.name << "\n";
-					std::cout << "  " << BOLD << "VPN Hostname: " << RESET << curr_vpn_host.hostname << "\n";
-					std::cout << "  " << BOLD << "VPN Local IP: " << RESET << curr_vpn_host.local_ip << "\n";
-					std::cout << "  " << BOLD << "VPN Matches Expected Hostname: " << RESET << \
-						((!net.expected_vpn_hostname.empty() && 
+					std::cout << "  " << BOLD << "Name:     " << RESET << curr_vpn_host.name << "\n";
+					std::cout << "  " << BOLD << "Hostname: " << RESET << curr_vpn_host.hostname \
+					<< RESET "{" << ((!net.expected_vpn_hostname.empty() && 
 						std::regex_match(curr_vpn_host.hostname, std::regex(net.expected_vpn_hostname, std::regex_constants::icase))) ? 
-						GREEN "YES" : RED "NO") << RESET << "\n";
+						GREEN "MATCH" : RED "NO") << "}\n";
+					std::cout << "  " << BOLD << "Local IP: " << RESET << curr_vpn_host.local_ip << "\n";
 					linecount += 4;
 				}
 				catch (const std::regex_error& ex) {
@@ -1851,6 +1930,33 @@ int main(int argc, char* argv[]) {
 			else {
 				std::cout << YELLOW "  No active VPN connection detected\n" RESET;
 			}
+			// session info
+			// first generate a timestamp
+			long long remaining = session.upTimeSec;
+			long long d = remaining / 86400;
+			remaining %= 86400;
+			long long h = remaining / 3600;
+			remaining %= 3600;
+			long long m = remaining / 60;
+			long long s = remaining % 60;
+			std::ostringstream t_oss;
+			t_oss << std::setfill('0') \
+				<< d << "d " \
+				<< std::setw(2) << h << ":" \
+				<< std::setw(2) << m << ":" \
+				<< std::setw(2) << s \
+				// add raw second counter
+				<< " (" << session.upTimeSec << ")" ;
+			std::string uptime_ts = t_oss.str();
+			// then print
+			std::cout << RESET BOLD << "Session Information:\n" << RESET ;
+			std::cout << "  " << BOLD << "Active user:     " << RESET << session.user << "\n";
+			std::cout << "  " << BOLD << "Domain:          " << RESET << session.domain << "\n";
+			std::cout << "  " << BOLD << "Session ID:      " << RESET << session.sessionId << "\n";
+			std::cout << "  " << BOLD << "Logged in users: " << RESET << session.loggedInCount << "\n";
+			std::cout << "  " << BOLD << "Hostname:        " << RESET << session.hostname << "\n";
+			std::cout << "  " << BOLD << "Uptime:          " << RESET << uptime_ts << "\n";
+			// local drives
 			std::cout << "\n" << BOLD << "Drives:\n" << RESET;
 			for (int st = 0; st < curr_drives.size(); st++) {
 				linecount++;
