@@ -6,7 +6,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 
-#include <cstddef> // apparently my distro doesnt have cstddef, but im compiling on windows for now so idrc
+#include <cstddef>
 #include <array>
 #include <atomic>
 #include <algorithm>
@@ -71,9 +71,9 @@ using namespace std;
 #endif
 
 // and this is intended for MinGW (MSYS2) cross-compilation, defines some stuff that not all non-native toolchains have in their Windows headers
-#ifdef __MINGW32__ 
+#if defined(__MINGW32__) && !defined(DNS_QUERY_REQUEST_VERSION_2)
 
-// MinGW windns.h missing Windows 10+ DNS Ex API
+// windns.h missing Windows 10+ DNS Ex API
 typedef IP4_ARRAY *PIP4_ARRAY;
 
 typedef struct _DNS_ADDR {
@@ -105,7 +105,7 @@ typedef struct _DNS_QUERY_REQUEST {
 	};
 } DNS_QUERY_REQUEST, *PDNS_QUERY_REQUEST;
 
-#endif  // __MINGW32__
+#endif
 
 // ANSI escape codes for use in VTP (Virtual Terminal Processing)
 #define RED     "\x1B[31m"
