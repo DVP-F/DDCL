@@ -671,8 +671,7 @@ static DiskConfig disks;
 static bool use_vt = true;
 static bool vt_enabled = false;
 
-struct WifiConnectionInfo
-{
+struct WifiConnectionInfo {
     std::string WSSID;
     std::string WName;
     std::string WBSSID{};
@@ -945,13 +944,14 @@ void GetNetworkInfo() {
 				// get wifi info
 				auto winfo = GetWifiConnectionInfo(p);
 				// and reassign it
-				// TODO: make this safer
-				info.WSSID = winfo->WSSID;
-				info.WName = winfo->WName;
-				info.WBSSID = winfo->WBSSID;
-				info.WSignalQuality = winfo->WSignalQuality;
-				info.WAuthAlgo = winfo->WAuthAlgo;
-				info.WCipherAlgo = winfo->WCipherAlgo;
+				if (winfo) {
+					info.WSSID          = winfo->WSSID.empty() ?       winfo->WSSID :         "N/A";
+					info.WName          = winfo->WName.empty() ?       winfo->WName :         "N/A";
+					info.WBSSID         = winfo->WBSSID.empty() ?      winfo->WBSSID :        "N/A";
+					info.WSignalQuality = winfo->WSignalQuality ?      winfo->WSignalQuality : 0;
+					info.WAuthAlgo      = winfo->WAuthAlgo.empty() ?   winfo->WAuthAlgo :     "N/A";
+					info.WCipherAlgo    = winfo->WCipherAlgo.empty() ? winfo->WCipherAlgo :   "N/A";
+				}
 			}
 			return info;
 		};
