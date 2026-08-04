@@ -1870,14 +1870,13 @@ int main(int argc, char* argv[]) {
 			std::cout << BOLD << "Internet: " << RESET;
 			std::cout << (curr_internet ? GREEN "ONLINE" : RED "OFFLINE") << RESET << "\n";
 			std::cout << BOLD << "DNS Resolution:\n" << RESET;
-			std::cout << "  " << BOLD << net.check << ":\n" << RESET << "    Local DNS: " << \
-				(curr_resolve_by_dns[0] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
-			std::cout << "    " << net.dns << ": " << \
-				(curr_resolve_by_dns[1] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
-			std::cout << "  " << BOLD << "www.wikipedia.org" << ":\n" << RESET << "    Local DNS: " << \
-				(curr_resolve_by_dns[2] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
-			std::cout << "    " << net.dns << ": " << \
-				(curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
+			std::cout << "  " << BOLD << net.check << ":\n" RESET;
+			std::cout << "    Local DNS: " << (curr_resolve_by_dns[0] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
+			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[1] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
+			std::cout << "  " << BOLD << "www.wikipedia.org" << ":\n" RESET ;
+			std::cout << "    Local DNS: " << (curr_resolve_by_dns[2] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
+			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
+			// ethernet connections if any
 			std::cout << BOLD << "Ethernet Adapter Info:\n" << RESET;
 			if (curr_EthernetInfo.GUID != "N/A") {
 				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << "\n";
@@ -1891,6 +1890,7 @@ int main(int argc, char* argv[]) {
 			} else {
 				std::cout << "  " << BOLD << "No Ethernet connections detected!\n" << RESET ;
 			}
+			// wifi connections if any
 			std::cout << BOLD << "WLAN Adapter Info:\n" << RESET;
 			if (curr_WLANInfo.GUID != "N/A") { // check guid to know if its connected
 				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_WLANInfo.FName.c_str() << "\n";
@@ -1908,6 +1908,7 @@ int main(int argc, char* argv[]) {
 			} else {
 				std::cout << "  " << BOLD << "Not connected!\n" << RESET ;
 			}
+			// vpn if present
 			std::cout << BOLD << "VPN Info:\n" << RESET;
 			if (curr_vpn_host.connected) {
 				try {
@@ -1963,6 +1964,7 @@ int main(int argc, char* argv[]) {
 				bool status = curr_drives[st];				// actually fine bc they're synced
 				std::cout << (status ? GREEN : RED) << "  " << disks.locals[st] << " " << (status ? "OK" : "FAIL") << RESET << "\n";
 			}
+			// and unc paths
 			std::cout << "\n" << BOLD << "UNC:\n" << RESET;
 			for (int st = 0; st < curr_unc.size(); st++) {
 				linecount++;
