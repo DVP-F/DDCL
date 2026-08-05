@@ -26,8 +26,7 @@
    - uninstall differs too then:  
      -> msi - use native uninstall, but still just an additional bin.    
      -> manual/standalone - just an extra bin in the install folder  
-7. Auto-resize terminal window  
-8. Labels for UNC paths and local mounted drives  
+7. Labels for UNC paths and local mounted drives  
 
 ## Table and checklist  
 
@@ -47,7 +46,6 @@
 | Redo (un)install         | uninstall.cpp                               |       |
 | Redo (un)install         | Update msi script                           |       |
 | Redo (un)install         | Update packaging scripts                    |       |
-| TUI                      | Auto-resize window size                     |       |
 
 ADD reg write from msi 'InstallType' and use to direct (un)install instead of args
 
