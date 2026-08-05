@@ -226,10 +226,10 @@ static void ensure_default_conf(const std::filesystem::path& path) {
 	// if the config file already exists, do nothing. otherwise, 
 	// create a new one with default settings and exit to allow user to edit it.
 	if (std::filesystem::exists(path)) return;
-	std::cout << "No conf.toml found, creating default at " << path << "\n";
+	std::cout << "No conf.toml found, creating default at " << path << std::endl;
 	std::ofstream out(path, std::ios::binary);
 	if (!out) {
-		std::cerr << "Failed to create " << path << "\n";
+		std::cerr << "Failed to create " << path << std::endl;
 		return;
 	}
 	out << DEFAULT_CONF;
@@ -705,20 +705,6 @@ static DiskConfig disks;
 static bool use_vt = true;
 static bool vt_enabled = false;
 
-void countRun() {
-	runCounter++;
-	runCounter &= 0xFFFFFFFFFFFFFFFF;
-	// should the loop end on next iteration?
-	if (maxRuns != 0 && maxRuns>(runCounter-1)) {
-		//* this effectively only runs if maxRuns>0&&runCounter>1 atp
-		// store in atomic
-		g_running.store(false);
-		// now the loop will exit on its NEXT iteration.
-		// so if maxRuns was set to 1, itll preform the initial status write and one loop to display the results, then exit.
-		// if 0 (default) itll NEVER exit without interruption
-	}
-}
-
 static std::string AuthAlgoToString(DOT11_AUTH_ALGORITHM algo) {
     switch (algo)
     {
@@ -1122,11 +1108,11 @@ static void ensure_log_location() {
 	std::filesystem::create_directories(dir, ec);
 	// check for specific errors that would cause logging to fail, and act appropriately
 	if (ec == std::errc::permission_denied) {
-		std::cerr << "Permission denied when creating log directory: " << dir.string() << "\n";
+		std::cerr << "Permission denied when creating log directory: " << dir.string() << std::endl;
 		std::cerr << "Please check permissions or specify a different log path in conf.toml\n";
 	}
 	else if (ec == std::errc::no_such_file_or_directory) {
-		std::cerr << "Invalid path when creating log directory: " << dir.string() << "\n";
+		std::cerr << "Invalid path when creating log directory: " << dir.string() << std::endl;
 		std::cerr << "Please check the log path in conf.toml\n";
 	}
 	else if (ec) {
@@ -1155,18 +1141,18 @@ static void write_to_log(const std::string& message) {
 		if (out.fail()) {
 			std::cerr << "FLUSH FAILED after write! path=[" << log_path.string() << "]\n";
 			DWORD err = GetLastError();
-			std::cerr << "  GetLastError()=" << err << "\n";
+			std::cerr << "  GetLastError()=" << err << std::endl;
 			return;
 		}
 		out.close();  // Explicit close
-		//std::cerr << "SUCCESS wrote to [" << log_path.string() << "] size=" << std::filesystem::file_size(log_path) << "\n";
+		//std::cerr << "SUCCESS wrote to [" << log_path.string() << "] size=" << std::filesystem::file_size(log_path) << std::endl;
 		if (!out) {
-			std::cerr << "Failed to open log file: " << log_path.string() << "\n";
+			std::cerr << "Failed to open log file: " << log_path.string() << std::endl;
 			return;
 		}
 	}
 	catch (const std::exception& ex) {
-		std::cerr << "write_to_log exception: " << ex.what() << "\n";
+		std::cerr << "write_to_log exception: " << ex.what() << std::endl;
 	}
 };
 
@@ -1397,7 +1383,7 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				try {
 					idx = _VOIDP__SIZE_T(info_copy);
 				} catch (std::exception &ex) {
-					std::cerr << "Conversion exception: " << ex.what() << "\n";
+					std::cerr << "Conversion exception: " << ex.what() << std::endl;
 					idx = 0;
 				}
 			}
@@ -1414,7 +1400,7 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				write_to_log(oss.str());
 			}
 			catch (const std::exception& ex) {
-				std::cerr << "\nError extracting drive letter in log_change: " << ex.what() << "\n";
+				std::cerr << "\nError extracting drive letter in log_change: " << ex.what() << std::endl;
 				std::ostringstream oss;
 				oss << time << ",drive_availability,unavailable,drive letter unavailable";
 				write_to_log(oss.str());
@@ -1546,7 +1532,7 @@ static void update_status() {
 							curr_drives[c] = is_drive_ready((char)std::toupper(driveStr[0]));
 						}
 						else {
-							std::cerr << "Invalid drive letter in config: " << driveStr << "\n";
+							std::cerr << "Invalid drive letter in config: " << driveStr << std::endl;
 							disks.locals.erase(disks.locals.begin() + c);
 						}
 					}
@@ -1660,6 +1646,20 @@ static BOOL WINAPI ConsoleCtrlHandler(DWORD dwCtrlType) {
 	}
 }
 
+void countRun() {
+	runCounter++;
+	runCounter &= 0xFFFFFFFFFFFFFFFF;
+	// should the loop end on next iteration?
+	if (maxRuns != 0 && runCounter>maxRuns) {
+		//* this effectively only runs if maxRuns>0&&runCounter>1 atp
+		// store in atomic
+		g_running.store(false);
+		// now the loop will exit on its NEXT iteration.
+		// so if maxRuns was set to 1, itll preform the initial status write and one loop to display the results, then exit.
+		// if 0 (default) itll NEVER exit without interruption
+	}
+}
+
 static void initialize_runtime() {
 	// Config file setup
 	conf_path = get_exe_dir() / "conf.toml";
@@ -1670,7 +1670,7 @@ static void initialize_runtime() {
 		tbl = toml::parse_file(conf_path.string());
 	}
 	catch (const toml::parse_error& err) {
-		std::cerr << "Error parsing conf.toml: " << err.description() << "\n";
+		std::cerr << "Error parsing conf.toml: " << err.description() << std::endl;
 		std::exit(1);
 	}
 	// Meta config
@@ -1865,18 +1865,18 @@ static void print_config_summary(char* choice) {
 				break;
 		}
 	}
-	std::cout << "\n";
-	std::cout << RESET BOLD << "Log Path: " << RESET BLUE << log_path.remove_filename().string() << RESET << "\n";
+	std::cout << std::endl;
+	std::cout << RESET BOLD << "Log Path: " << RESET BLUE << log_path.remove_filename().string() << RESET << std::endl;
 	std::cout << BOLD << "Virtual Terminal Processing: " << RESET YELLOW << (use_vt ? "Requested" : "Not Requested\n\n");
 	if (use_vt) {
 		std::cout << RESET BOLD << ", Status: " << (vt_enabled ? GREEN "ON" : YELLOW "OFF") << RESET << "\n\n"; // This will be set in initialize_runtime after attempting to enable VT
 	}
-	std::cout << "Network:" << "\n";
-	std::cout << "  Check Host: " << BOLD << net.check << RESET << "\n";
-	std::cout << "  DNS Server: " << BOLD << net.dns << RESET << "\n";
-	std::cout << "  Expected Domain Suffix: " << BOLD << net.expected_domain << RESET << "\n";
+	std::cout << "Network:" << std::endl;
+	std::cout << "  Check Host: " << BOLD << net.check << RESET << std::endl;
+	std::cout << "  DNS Server: " << BOLD << net.dns << RESET << std::endl;
+	std::cout << "  Expected Domain Suffix: " << BOLD << net.expected_domain << RESET << std::endl;
 	std::cout << "  Expected VPN Hostname: " << BOLD << net.expected_vpn_hostname << RESET << "\n\n";
-	std::cout << "Disks:" << "\n";
+	std::cout << "Disks:" << std::endl;
 	std::cout << "  Local Drives: ";
 	for (const auto& drive : disks.locals) {
 		std::cout << BOLD << drive << RESET << " ";
@@ -1884,7 +1884,7 @@ static void print_config_summary(char* choice) {
 	std::cout << "\n  UNC paths:\n";
 	for (std::size_t i = 0; i < disks.unc.size(); i++) {
 		int importance = disks.unc_imp[i];
-		std::cout << (importance == 1 ? RED : YELLOW) << "    " << BOLD << disks.unc[i] << RESET << "\n";
+		std::cout << (importance == 1 ? RED : YELLOW) << "    " << BOLD << disks.unc[i] << RESET << std::endl;
 	}
 }
 
@@ -1979,63 +1979,63 @@ int main(int argc, char* argv[]) {
 			std::cout << CLEAR;
 			std::cout << BOLD << CYAN << "=== [" << get_timestamp() << "] Network & Drive Status ===\n" << RESET;
 			std::cout << BOLD << "Internet: " << RESET;
-			std::cout << (curr_internet ? GREEN "ONLINE" : RED "OFFLINE") << RESET << "\n";
+			std::cout << (curr_internet ? GREEN "ONLINE" : RED "OFFLINE") << RESET << std::endl;
 			std::cout << BOLD << "DNS Resolution:\n" << RESET;
 			std::cout << "  " << BOLD << net.check << ":\n" RESET;
-			std::cout << "    Local DNS: " << (curr_resolve_by_dns[0] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
-			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[1] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
+			std::cout << "    Local DNS: " << (curr_resolve_by_dns[0] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
+			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[1] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
 			std::cout << "  " << BOLD << "www.wikipedia.org" << ":\n" RESET ;
-			std::cout << "    Local DNS: " << (curr_resolve_by_dns[2] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
-			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << "\n";
+			std::cout << "    Local DNS: " << (curr_resolve_by_dns[2] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
+			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
 			// ethernet connections if any
 			std::cout << BOLD << "Ethernet Adapter Info:\n" << RESET;
 			if (curr_EthernetInfo.GUID != "N/A") {
-				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << "\n";
-				std::cout << "  " << BOLD << "Description:   " << RESET << curr_EthernetInfo.Description.c_str() << "\n";
-				std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() << "{" \
-					<< (net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN " MATCH" : RED " NO MATCH") << RESET "}\n";
-				std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_EthernetInfo.MAC.c_str() << "\n";
-				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_EthernetInfo.PrimaryDHCPv4.c_str() << "\n";
-				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_EthernetInfo.PrimaryDNS.c_str() << "\n";
-				std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_EthernetInfo.PrimaryGateway.c_str() << "\n";
+				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << std::endl;
+				std::cout << "  " << BOLD << "Description:   " << RESET << curr_EthernetInfo.Description.c_str() << std::endl;
+				std::cout << "  " << BOLD << "DNS Suffix:    " << RESET << curr_EthernetInfo.DNSSuffix.c_str() << " {" \
+					<< (net.expected_domain == curr_EthernetInfo.DNSSuffix.c_str() ? GREEN "MATCH" : RED "NO MATCH") << RESET "}\n";
+				std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_EthernetInfo.MAC.c_str() << std::endl;
+				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_EthernetInfo.PrimaryDHCPv4.c_str() << std::endl;
+				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_EthernetInfo.PrimaryDNS.c_str() << std::endl;
+				std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_EthernetInfo.PrimaryGateway.c_str() << std::endl;
 			} else {
-				std::cout << "  " << BOLD << "No Ethernet connections detected!\n" << RESET ;
+				std::cout << "  " << YELLOW << "No Ethernet connections detected!\n" << RESET ;
 			}
 			// wifi connections if any
 			std::cout << BOLD << "WLAN Adapter Info:\n" << RESET;
-			if (curr_WLANInfo.GUID != "N/A") { // check guid to know if its connected
-				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_WLANInfo.FName.c_str() << "\n";
-				std::cout << "  " << BOLD << "Description:   " << RESET << curr_WLANInfo.Description.c_str() << "\n";
-				std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_WLANInfo.MAC.c_str() << "\n";
-				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_WLANInfo.PrimaryDHCPv4.c_str() << "\n";
-				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_WLANInfo.PrimaryDNS.c_str() << "\n";
-				std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_WLANInfo.PrimaryGateway.c_str() << "\n";
-				std::cout << "  " << BOLD << "SSID:          " << RESET << curr_WLANInfo.WSSID.c_str() << "\n";
-				std::cout << "  " << BOLD << "BSSID:         " << RESET << curr_WLANInfo.WBSSID.c_str() << "\n";
-				std::cout << "  " << BOLD << "Network Name:  " << RESET << curr_WLANInfo.WName.c_str() << "\n";
-				std::cout << "  " << BOLD << "Signal:        " << RESET << curr_WLANInfo.WSignalQuality << "\n";
-				std::cout << "  " << BOLD << "Auth Algo:     " << RESET << curr_WLANInfo.WAuthAlgo << "\n";
-				std::cout << "  " << BOLD << "Cipher Algo:   " << RESET << curr_WLANInfo.WCipherAlgo << "\n";
+			if (curr_WLANInfo.GUID != "N/A") {
+				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_WLANInfo.FName.c_str() << std::endl;
+				std::cout << "  " << BOLD << "Description:   " << RESET << curr_WLANInfo.Description.c_str() << std::endl;
+				std::cout << "  " << BOLD << "MAC Address:   " << RESET << curr_WLANInfo.MAC.c_str() << std::endl;
+				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_WLANInfo.PrimaryDHCPv4.c_str() << std::endl;
+				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_WLANInfo.PrimaryDNS.c_str() << std::endl;
+				std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_WLANInfo.PrimaryGateway.c_str() << std::endl;
+				std::cout << "  " << BOLD << "SSID:          " << RESET << curr_WLANInfo.WSSID.c_str() << std::endl;
+				std::cout << "  " << BOLD << "BSSID:         " << RESET << curr_WLANInfo.WBSSID.c_str() << std::endl;
+				std::cout << "  " << BOLD << "Network Name:  " << RESET << curr_WLANInfo.WName.c_str() << std::endl;
+				std::cout << "  " << BOLD << "Signal:        " << RESET << curr_WLANInfo.WSignalQuality << std::endl;
+				std::cout << "  " << BOLD << "Auth Algo:     " << RESET << curr_WLANInfo.WAuthAlgo << std::endl;
+				std::cout << "  " << BOLD << "Cipher Algo:   " << RESET << curr_WLANInfo.WCipherAlgo << std::endl;
 			} else {
-				std::cout << "  " << BOLD << "Not connected!\n" << RESET ;
+				std::cout << "  " << YELLOW << "Not connected!\n" << RESET ;
 			}
 			// vpn if present
 			std::cout << BOLD << "VPN Info:\n" << RESET;
 			if (curr_vpn_host.connected) {
 				try {
-					std::cout << "  " << BOLD << "Name:     " << RESET << curr_vpn_host.name << "\n";
+					std::cout << "  " << BOLD << "Name:     " << RESET << curr_vpn_host.name << std::endl;
 					std::cout << "  " << BOLD << "Hostname: " << RESET << curr_vpn_host.hostname \
-					<< RESET "{" << ((!net.expected_vpn_hostname.empty() && 
+					<< RESET " {" << ((!net.expected_vpn_hostname.empty() && 
 						std::regex_match(curr_vpn_host.hostname, std::regex(net.expected_vpn_hostname, std::regex_constants::icase)))
 						? GREEN "MATCH" : RED "NO MATCH") << "}\n";
-					std::cout << "  " << BOLD << "Local IP: " << RESET << curr_vpn_host.local_ip << "\n";
+					std::cout << "  " << BOLD << "Local IP: " << RESET << curr_vpn_host.local_ip << std::endl;
 					linecount += 4;
 				}
 				catch (const std::regex_error& ex) {
 					// print a msg about the user being bad at regexes , print context, and then raise the error again to halt execution
-					std::cerr << RED BOLD << "ERROR: Invalid regex in config for expected_vpn_hostname: " << net.expected_vpn_hostname << "\n";
+					std::cerr << RED BOLD << "ERROR: Invalid regex in config for expected_vpn_hostname: " << net.expected_vpn_hostname << std::endl;
 					std::cerr << "- Please fix the regex pattern in conf.toml and restart the program.\n" << RESET;
-					std::cerr << "Regex error details: " << ex.what() << "\n";
+					std::cerr << "Regex error details: " << ex.what() << std::endl;
 					throw ex;
 				}
 			}
@@ -2062,18 +2062,18 @@ int main(int argc, char* argv[]) {
 			std::string uptime_ts = t_oss.str();
 			// then print
 			std::cout << RESET BOLD << "Session Information:\n" << RESET ;
-			std::cout << "  " << BOLD << "Active user:     " << RESET << session.user << "\n";
-			std::cout << "  " << BOLD << "Domain:          " << RESET << session.domain << "\n";
-			std::cout << "  " << BOLD << "Session ID:      " << RESET << session.sessionId << "\n";
-			std::cout << "  " << BOLD << "Logged in users: " << RESET << session.loggedInCount << "\n";
-			std::cout << "  " << BOLD << "Hostname:        " << RESET << session.hostname << "\n";
-			std::cout << "  " << BOLD << "Uptime:          " << RESET << uptime_ts << "\n";
+			std::cout << "  " << BOLD << "Active user:     " << RESET << session.user << std::endl;
+			std::cout << "  " << BOLD << "Domain:          " << RESET << session.domain << std::endl;
+			std::cout << "  " << BOLD << "Session ID:      " << RESET << session.sessionId << std::endl;
+			std::cout << "  " << BOLD << "Logged in users: " << RESET << session.loggedInCount << std::endl;
+			std::cout << "  " << BOLD << "Hostname:        " << RESET << session.hostname << std::endl;
+			std::cout << "  " << BOLD << "Uptime:          " << RESET << uptime_ts << std::endl;
 			// local drives
 			std::cout << "\n" << BOLD << "Drives:\n" << RESET;
 			for (int st = 0; st < curr_drives.size(); st++) {
 				linecount++;
 				bool status = curr_drives[st];				// actually fine bc they're synced
-				std::cout << (status ? GREEN : RED) << "  " << disks.locals[st] << " " << (status ? "OK" : "FAIL") << RESET << "\n";
+				std::cout << (status ? GREEN : RED) << "  " << disks.locals[st] << " " << (status ? "OK" : "FAIL") << RESET << std::endl;
 			}
 			// and unc paths
 			std::cout << "\n" << BOLD << "UNC:\n" << RESET;
@@ -2081,7 +2081,7 @@ int main(int argc, char* argv[]) {
 				linecount++;
 				bool status = curr_unc[st];
 				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED)) << "  " \
-				<< disks.unc[st] << " " << (status ? "OK" : "FAIL") << RESET << "\n";
+				<< disks.unc[st] << " " << (status ? "OK" : "FAIL") << RESET << std::endl;
 			}
 			std::cout << "\n" << BOLD << MAGENTA << "Monitoring...\n" << RESET;
 			std::cout << BLUE << "Log path: " << log_path.string().c_str() << "\n" << RESET << std::endl;
