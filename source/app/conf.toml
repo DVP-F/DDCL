@@ -42,8 +42,9 @@ unc = [
 	# localhosts can be used to test the virtual loopback adapter too - if the path is a shared folder or otherwise available. 
 	"#!\\\\localhost\\C",
 	# add `$username` to use the current user's username in a path, for example to check the user's home directory 
+	# or `$userdomain` to use the current user's dns domain name
 	#  !!  (UNC only; intended for AD/AAD where a home folder is set up on a file server)  !!
-	# obligatory reminder that this is string expansion, not parametrized queries. ensure the envvar %USERNAME% is safe.
+	# obligatory reminder that this is string expansion, not parametrized queries. ensure the envvars %USERNAME% and %USERDNSDOMAIN% are safe.
 	"\\\\localhost\\Users\\$username",
 	# this kind of path (C:\Users\*) is natively language-agnostic - `Users` points the same place no matter the syslocale.
 ]
