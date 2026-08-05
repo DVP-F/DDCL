@@ -118,6 +118,8 @@ typedef struct _DNS_QUERY_REQUEST {
 #define RESET   "\x1B[0m"
 #define BOLD    "\x1B[1m"
 #define CLEAR   "\x1B[2J\x1B[H"
+#define NOWRAP  "\x1B[?7l"
+#define WRAP    "\x1B[?7h"
 
 static bool show_config = false;
 static bool show_help = false;
@@ -1888,12 +1890,49 @@ static void print_config_summary(char* choice) {
 	}
 }
 
-void ResizeConsoleHeight(SHORT rows, SHORT cols = 120) {
+void PrepareTerminal(short rows) {
+    constexpr short MIN_WIDTH = 100;
     HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    COORD bufferSize = { cols, rows };
-    SetConsoleScreenBufferSize(hOut, bufferSize);
-    SMALL_RECT windowSize = {0, 0, cols - 1, rows - 1 };
-    SetConsoleWindowInfo(hOut, TRUE, &windowSize);
+    short currentRows = 0;
+    short currentCols = 0;
+    CONSOLE_SCREEN_BUFFER_INFO info{};
+    if (GetConsoleScreenBufferInfo(hOut, &info)) {
+        currentCols = info.srWindow.Right - info.srWindow.Left + 1;
+        currentRows = info.srWindow.Bottom - info.srWindow.Top + 1;
+    }
+    // If query failed, assume minimums
+    if (currentCols <= 0)
+        currentCols = MIN_WIDTH;
+    if (currentRows <= 0)
+        currentRows = 25;
+    short targetRows = max(currentRows, rows);
+    short targetCols = max(currentCols, MIN_WIDTH);
+    // Nothing to do
+    if (targetRows == currentRows && targetCols == currentCols)
+        return;
+    // First try ANSI (WT, xterm, etc.)
+    std::cout << "\x1B[8;" << targetRows << ";" << targetCols << "t";
+    std::cout.flush();
+    CONSOLE_SCREEN_BUFFER_INFO after{};
+    if (!GetConsoleScreenBufferInfo(hOut, &after))
+        return;
+    short actualRows = after.srWindow.Bottom - after.srWindow.Top + 1;
+    short actualCols = after.srWindow.Right - after.srWindow.Left + 1;
+    if (actualRows >= targetRows && actualCols >= targetCols)
+        return;
+    // Try Win32 resize
+    COORD buffer{
+        targetCols,
+        targetRows
+    };
+    SetConsoleScreenBufferSize(hOut, buffer);
+    SMALL_RECT rect{
+        0,
+        0,
+        (SHORT)(targetCols - 1),
+        (SHORT)(targetRows - 1)
+    };
+    SetConsoleWindowInfo(hOut, TRUE, &rect);
 }
 
 int main(int argc, char* argv[]) {
@@ -1962,21 +2001,18 @@ int main(int argc, char* argv[]) {
 		return 2;
 	}
 
-	// init a decent size
-	ResizeConsoleHeight(20);
-	SHORT current_size = 20;
-
 	// Main monitoring loop 
 	try {
 		auto timer_start = std::chrono::steady_clock::now();
 		while (g_running.load()) { // check if it should even run any more
 			countRun(); // register the run
-			SHORT linecount = 20; // 16 or smn guaranteed lines
+			SHORT linecount = 8; // covers start -> dns resolution - inc from there
+			linecount += 16; // for margin
 			auto loop_start = std::chrono::steady_clock::now();
 			update_status();
 
 			// Just a wall of logic for the status dump
-			std::cout << CLEAR;
+			std::cout << CLEAR NOWRAP;
 			std::cout << BOLD << CYAN << "=== [" << get_timestamp() << "] Network & Drive Status ===\n" << RESET;
 			std::cout << BOLD << "Internet: " << RESET;
 			std::cout << (curr_internet ? GREEN "ONLINE" : RED "OFFLINE") << RESET << std::endl;
@@ -1988,7 +2024,8 @@ int main(int argc, char* argv[]) {
 			std::cout << "    Local DNS: " << (curr_resolve_by_dns[2] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
 			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
 			// ethernet connections if any
-			std::cout << BOLD << "Ethernet Adapter Info:\n" << RESET;
+			std::cout << BOLD << "Ethernet Adapter Info:" << RESET << std::endl;
+			linecount++;
 			if (curr_EthernetInfo.GUID != "N/A") {
 				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_EthernetInfo.FName.c_str() << std::endl;
 				std::cout << "  " << BOLD << "Description:   " << RESET << curr_EthernetInfo.Description.c_str() << std::endl;
@@ -1998,11 +2035,14 @@ int main(int argc, char* argv[]) {
 				std::cout << "  " << BOLD << "DHCPv4 Server: " << RESET << curr_EthernetInfo.PrimaryDHCPv4.c_str() << std::endl;
 				std::cout << "  " << BOLD << "DNS Server:    " << RESET << curr_EthernetInfo.PrimaryDNS.c_str() << std::endl;
 				std::cout << "  " << BOLD << "Gateway:       " << RESET << curr_EthernetInfo.PrimaryGateway.c_str() << std::endl;
+				linecount += 7;
 			} else {
-				std::cout << "  " << YELLOW << "No Ethernet connections detected!\n" << RESET ;
+				std::cout << "  " << YELLOW << "No Ethernet connections detected!" << RESET << std::endl ;
+				linecount++;
 			}
 			// wifi connections if any
-			std::cout << BOLD << "WLAN Adapter Info:\n" << RESET;
+			std::cout << BOLD << "WLAN Adapter Info:" << RESET << std::endl ;
+			linecount++;
 			if (curr_WLANInfo.GUID != "N/A") {
 				std::cout << "  " << BOLD << "Friendly Name: " << RESET << curr_WLANInfo.FName.c_str() << std::endl;
 				std::cout << "  " << BOLD << "Description:   " << RESET << curr_WLANInfo.Description.c_str() << std::endl;
@@ -2016,11 +2056,14 @@ int main(int argc, char* argv[]) {
 				std::cout << "  " << BOLD << "Signal:        " << RESET << curr_WLANInfo.WSignalQuality << std::endl;
 				std::cout << "  " << BOLD << "Auth Algo:     " << RESET << curr_WLANInfo.WAuthAlgo << std::endl;
 				std::cout << "  " << BOLD << "Cipher Algo:   " << RESET << curr_WLANInfo.WCipherAlgo << std::endl;
+				linecount += 12;
 			} else {
-				std::cout << "  " << YELLOW << "Not connected!\n" << RESET ;
+				std::cout << "  " << YELLOW << "Not connected!" << RESET << std::endl ;
+				linecount++;
 			}
 			// vpn if present
-			std::cout << BOLD << "VPN Info:\n" << RESET;
+			std::cout << BOLD << "VPN Info:" << RESET << std::endl ;
+			linecount++;
 			if (curr_vpn_host.connected) {
 				try {
 					std::cout << "  " << BOLD << "Name:     " << RESET << curr_vpn_host.name << std::endl;
@@ -2029,18 +2072,19 @@ int main(int argc, char* argv[]) {
 						std::regex_match(curr_vpn_host.hostname, std::regex(net.expected_vpn_hostname, std::regex_constants::icase)))
 						? GREEN "MATCH" : RED "NO MATCH") << "}\n";
 					std::cout << "  " << BOLD << "Local IP: " << RESET << curr_vpn_host.local_ip << std::endl;
-					linecount += 4;
+					linecount += 3;
 				}
 				catch (const std::regex_error& ex) {
 					// print a msg about the user being bad at regexes , print context, and then raise the error again to halt execution
 					std::cerr << RED BOLD << "ERROR: Invalid regex in config for expected_vpn_hostname: " << net.expected_vpn_hostname << std::endl;
-					std::cerr << "- Please fix the regex pattern in conf.toml and restart the program.\n" << RESET;
+					std::cerr << "- Please fix the regex pattern in conf.toml and restart the program." << RESET << std::endl ;
 					std::cerr << "Regex error details: " << ex.what() << std::endl;
 					throw ex;
 				}
 			}
 			else {
-				std::cout << YELLOW "  No active VPN connection detected\n" RESET;
+				std::cout << YELLOW "  No active VPN connection detecd\n" RESET << std::endl ;
+				linecount++;
 			}
 			// session info
 			// first generate a timestamp
@@ -2061,41 +2105,42 @@ int main(int argc, char* argv[]) {
 				<< " (" << session.upTimeSec << ")" ;
 			std::string uptime_ts = t_oss.str();
 			// then print
-			std::cout << RESET BOLD << "Session Information:\n" << RESET ;
+			std::cout << RESET BOLD << "Session Information:" << RESET << std::endl;
 			std::cout << "  " << BOLD << "Active user:     " << RESET << session.user << std::endl;
 			std::cout << "  " << BOLD << "Domain:          " << RESET << session.domain << std::endl;
 			std::cout << "  " << BOLD << "Session ID:      " << RESET << session.sessionId << std::endl;
 			std::cout << "  " << BOLD << "Logged in users: " << RESET << session.loggedInCount << std::endl;
 			std::cout << "  " << BOLD << "Hostname:        " << RESET << session.hostname << std::endl;
 			std::cout << "  " << BOLD << "Uptime:          " << RESET << uptime_ts << std::endl;
+			linecount += 7;
 			// local drives
-			std::cout << "\n" << BOLD << "Drives:\n" << RESET;
+			std::cout << "\n" << BOLD << "Drives:" << RESET << std::endl;
+			linecount++;
 			for (int st = 0; st < curr_drives.size(); st++) {
 				linecount++;
 				bool status = curr_drives[st];				// actually fine bc they're synced
 				std::cout << (status ? GREEN : RED) << "  " << disks.locals[st] << " " << (status ? "OK" : "FAIL") << RESET << std::endl;
 			}
 			// and unc paths
-			std::cout << "\n" << BOLD << "UNC:\n" << RESET;
+			std::cout << "\n" << BOLD << "UNC:" << RESET << std::endl;
+			linecount++;
 			for (int st = 0; st < curr_unc.size(); st++) {
 				linecount++;
 				bool status = curr_unc[st];
 				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED)) << "  " \
-				<< disks.unc[st] << " " << (status ? "OK" : "FAIL") << RESET << std::endl;
+				<< disks.unc[st] << " " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
-			std::cout << "\n" << BOLD << MAGENTA << "Monitoring...\n" << RESET;
+			std::cout << "\n" << BOLD << MAGENTA << "Monitoring..." << RESET << std::endl;
 			std::cout << BLUE << "Log path: " << log_path.string().c_str() << "\n" << RESET << std::endl;
+			linecount += 2;
 
 			// update window size
-			// TODO: make this work ffs
-			if (linecount < current_size) {
-				ResizeConsoleHeight(linecount);
-			}
+			PrepareTerminal(linecount);
 
 			// Perform the 1s timed loop
 			auto time_end = std::chrono::steady_clock::now();
 			if (timer_start >= (time_end - std::chrono::seconds(1))) {
-				// Grace period to avoid false positives the first second
+				// Grace period to avoid false positives the first second of execution
 				status_check(true); // perform a status check without logging
 				// Also clamp sleep time to 0 <= ... <= 1 seconds VERY defensively 
 				// - this keeps the loop timing as synchronized as possible without starting on multithreading
@@ -2107,6 +2152,7 @@ int main(int argc, char* argv[]) {
 			std::this_thread::sleep_for(max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - min(std::chrono::seconds{ 1 }, time_end - loop_start)));
 		}
 		WSACleanup();
+		std::cout << WRAP; std::cout.flush();
 		return 0;
 	}
 	// These should force a clean exit on exceptions
@@ -2114,13 +2160,16 @@ int main(int argc, char* argv[]) {
 	catch (const std::exception& ex) {
 		std::cerr << RED << "Unhandled exception: " << ex.what() << RESET << std::endl;
 		WSACleanup();
+		std::cout << WRAP; std::cout.flush();
 		return 1;
 	}
 	catch (...) {
 		std::cerr << RED << "Unknown exception occurred." << RESET << std::endl;
 		WSACleanup();
+		std::cout << WRAP; std::cout.flush();
 		return 1;
 	}
 	WSACleanup();
+		std::cout << WRAP; std::cout.flush();
 	return 0;
 }
