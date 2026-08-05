@@ -121,6 +121,7 @@ typedef struct _DNS_QUERY_REQUEST {
 
 static bool show_config = false;
 static bool show_help = false;
+static bool set_maxRuns = false;
 
 #define VERSION "0.1.1"
 
@@ -169,8 +170,9 @@ unc = [
 	# localhosts can be used to test the virtual loopback adapter too - if the path is a shared folder or otherwise available. 
 	"#!\\\\localhost\\C",
 	# add `$username` to use the current user's username in a path, for example to check the user's home directory 
+	# or `$userdomain` to use the current user's dns domain name
 	#  !!  (UNC only; intended for AD/AAD where a home folder is set up on a file server)  !!
-	# obligatory reminder that this is string expansion, not parametrized queries. ensure the envvar %USERNAME% is safe.
+	# obligatory reminder that this is string expansion, not parametrized queries. ensure the envvars %USERNAME% and %USERDNSDOMAIN% are safe.
 	"\\\\localhost\\Users\\$username",
 	# this kind of path (C:\Users\*) is natively language-agnostic - `Users` points the same place no matter the syslocale.
 ]
@@ -692,6 +694,7 @@ std::vector<bool> curr_unc;
 
 SessionInfo session;
 uint64_t runCounter = 0;
+uint64_t maxRuns = 0; // 0 should be no limit
 
 // config vars
 bool firstRun = true;
@@ -701,6 +704,20 @@ static NetworkConfig net;
 static DiskConfig disks;
 static bool use_vt = true;
 static bool vt_enabled = false;
+
+void countRun() {
+	runCounter++;
+	runCounter &= 0xFFFFFFFFFFFFFFFF;
+	// should the loop end on next iteration?
+	if (maxRuns != 0 && maxRuns>(runCounter-1)) {
+		//* this effectively only runs if maxRuns>0&&runCounter>1 atp
+		// store in atomic
+		g_running.store(false);
+		// now the loop will exit on its NEXT iteration.
+		// so if maxRuns was set to 1, itll preform the initial status write and one loop to display the results, then exit.
+		// if 0 (default) itll NEVER exit without interruption
+	}
+}
 
 static std::string AuthAlgoToString(DOT11_AUTH_ALGORITHM algo) {
     switch (algo)
@@ -1732,17 +1749,31 @@ static void initialize_runtime() {
 		if (auto arr = disks_tbl->operator[]("unc").as_array()) {
 			for (auto& v : *arr)
 				if (auto s = v.value<std::string_view>()) {
-					// Expand $username placeholder at config-load time
+					// Expand $username and $userdomain placeholders at config-load time
 					std::string unc = std::string(s->data(), s->size());
 	#pragma warning(disable:4996)
 					const char* userEnvCfg = getenv("USERNAME");
+					const char* userDomainEnvCfg = getenv("USERDNSDOMAIN");
 	#pragma warning(default:4996)
 					std::string username = userEnvCfg ? std::string(userEnvCfg) : std::string();
-					const std::string placeholder = "$username";
-					std::size_t pos = 0;
-					while ((pos = unc.find(placeholder, pos)) != std::string::npos) {
-						unc.replace(pos, placeholder.size(), username);
-						pos += username.size();
+					std::string userdomain = userDomainEnvCfg ? std::string(userDomainEnvCfg) : std::string();
+					// u/n
+					{
+						const std::string placeholder = "$username";
+						std::size_t pos = 0;
+						while ((pos = unc.find(placeholder, pos)) != std::string::npos) {
+							unc.replace(pos, placeholder.size(), username);
+							pos += username.size();
+						}
+					}
+					// domain
+					{
+						const std::string placeholder = "$userdomain";
+						std::size_t pos = 0;
+						while ((pos = unc.find(placeholder, pos)) != std::string::npos) {
+							unc.replace(pos, placeholder.size(), userdomain);
+							pos += userdomain.size();
+						}
 					}
 					disks.unc.emplace_back(std::move(unc));
 					// update unc_imp based off s[0:1]
@@ -1797,7 +1828,10 @@ static void print_help_text(char* calltext) {
 	std::cout << "  -h --help" << std::endl;
 	std::cout << "      Display this help message" << std::endl;
 	std::cout << "  -c --config" << std::endl;
-	std::cout << "      Display a configuration summary" << RESET << std::endl << std::endl;
+	std::cout << "      Display a configuration summary" << RESET << std::endl;
+	std::cout << "  -t --times:<count>" << std::endl;
+	std::cout << "      Run detection loop <count> times. Defaults to 0." << std::endl;
+	std::cout << "      If <count> is not given correctly, assumes 1." << std::endl << std::endl;
 	std::cout << "DDCL is a tool for surveying network and storage status changes." << std::endl;
 	std::cout << "Checks are performed once every second and logged to a location given through a fallback chain." << std::endl;
 	std::cout << " (See documentation at https://github.com/DVP-F/DDCL for detail)" << std::endl;
@@ -1877,15 +1911,38 @@ int main(int argc, char* argv[]) {
 
 	// first of: handler arguments, if any.
 	if (argc > 2) {
-		std::cerr << "Too many arguments provided.\nUsage: " << argv[0] << " [-h|--help] [-c|--config]" << std::endl;
+		std::cerr << "Too many arguments provided.\nUsage: " << argv[0] << " [ [-h|--help] | [-c|--config] | [-t|--times:<number>] ]" << std::endl;
 		throw std::invalid_argument("Too many arguments provided");
 	}
 	if (argc == 2) { // 2 arguments since arg 0 is the binary call
-		if (std::string_view(argv[1]) == "-h" || std::string_view(argv[1]) == "--help") {
+		auto arg_strv = std::string_view(argv[1]);
+		if (arg_strv == "-h" || arg_strv == "--help") {
 			show_help = true;
 		}
-		if (std::string_view(argv[1]) == "-c" || std::string_view(argv[1]) == "--config") {
+		else if (arg_strv == "-c" || arg_strv == "--config") {
 			show_config = true;
+		}
+		else {
+			size_t count = 0;
+			// cpp17 version. avoids cpp20-exclusive starts_with and MSVC _Starts_with
+			constexpr std::string_view short_opt = "-t:";
+			constexpr std::string_view long_opt  = "--times:";
+			std::string_view number;
+			if (arg_strv.compare(0, short_opt.size(), short_opt) == 0) {
+				number = arg_strv.substr(short_opt.size());
+			}
+			else if (arg_strv.compare(0, long_opt.size(), long_opt) == 0) {
+				number = arg_strv.substr(long_opt.size());
+			}
+			if (!number.empty()) {
+				auto [ptr, ec] = std::from_chars(number.data(), number.data() + number.size(), count);
+				if (ec != std::errc{} || ptr != number.data() + number.size()) {
+					// Invalid number
+					// TODO: Emit a warn here.
+					count = 1; //* gonna assume 1
+				}
+			}
+			maxRuns = (uint64_t)count;
 		}
 	}
 
@@ -1912,7 +1969,8 @@ int main(int argc, char* argv[]) {
 	// Main monitoring loop 
 	try {
 		auto timer_start = std::chrono::steady_clock::now();
-		while (g_running.load()) {
+		while (g_running.load()) { // check if it should even run any more
+			countRun(); // register the run
 			SHORT linecount = 20; // 16 or smn guaranteed lines
 			auto loop_start = std::chrono::steady_clock::now();
 			update_status();
