@@ -70,43 +70,6 @@ using namespace std;
 #define DNS_MAX_SOCKADDR_LENGTH 128
 #endif
 
-// and this is intended for MinGW (MSYS2) cross-compilation, defines some stuff that not all non-native toolchains have in their Windows headers
-#if defined(__MINGW32__) && !defined(DNS_QUERY_REQUEST_VERSION_2)
-
-// windns.h missing Windows 10+ DNS Ex API
-typedef IP4_ARRAY *PIP4_ARRAY;
-
-typedef struct _DNS_ADDR {
-  CHAR MaxSa[DNS_MAX_SOCKADDR_LENGTH];  // sockaddr_in or sockaddr_in6
-  DWORD DnsAddrUserDword[8];            // Reserved, must be 0
-} DNS_ADDR, *PDNS_ADDR;
-
-typedef struct _DNS_ADDR_ARRAY {
-	DWORD MaxCount;
-	DWORD AddrCount;
-	DNS_ADDR AddrArray[ANYSIZE_ARRAY];
-} DNS_ADDR_ARRAY, *PDNS_ADDR_ARRAY;
-
-typedef enum _DNS_QUERY_REQUEST_VERSION {
-	DNS_QUERY_REQUEST_VERSION_1 = 0x1,
-	DNS_QUERY_REQUEST_VERSION_2 = 0x2
-} DNS_QUERY_REQUEST_VERSION;
-
-typedef struct _DNS_QUERY_REQUEST {
-	DNS_QUERY_REQUEST_VERSION Version;
-	DWORD                     Options;
-	PWSTR                     QueryName;
-	WORD                      QueryType;
-	WORD                      QueryClass;
-	union {
-		PIP4_ARRAY             pIp4AddrArray;
-		PDNS_ADDR_ARRAY        pDnsServerList;
-		PWSTR                  pQueryString;
-	};
-} DNS_QUERY_REQUEST, *PDNS_QUERY_REQUEST;
-
-#endif
-
 // ANSI escape codes for use in VTP (Virtual Terminal Processing)
 #define RED     "\x1B[31m"
 #define GREEN   "\x1B[32m"
@@ -527,30 +490,18 @@ static std::vector<bool> resolve_hostname(const std::string& hostname, const std
 	std::vector<bool> results(2, false);
 	// FIRST: Custom DNS server
 	{
-		DNS_QUERY_REQUEST req = {};
-		req.Version = DNS_QUERY_REQUEST_VERSION1;
-		std::wstring wname = to_wide(const_cast<char*>(hostname.c_str()));
-		req.QueryName = wname.c_str();
-		req.QueryType = DNS_TYPE_A;
-		sockaddr_in dns_addr = {};
-		dns_addr.sin_family = AF_INET;
-		inet_pton(AF_INET, dns_server_ip.c_str(), &dns_addr.sin_addr);
-		DNS_ADDR_ARRAY dns_servers = {};
-		dns_servers.MaxCount = 1;
+		IP4_ARRAY dns_servers = {};
 		dns_servers.AddrCount = 1;
-		dns_servers.Tag = 0;
-		dns_servers.Family = AF_INET;
-		dns_servers.WordReserved = 0;
-		dns_servers.Flags = 0;
-		dns_servers.MatchFlag = 0;
-		dns_servers.Reserved1 = 0;
-		dns_servers.Reserved2 = 0;
-		std::memset(&dns_servers.AddrArray[0], 0, sizeof(dns_servers.AddrArray[0]));
-		std::memcpy(dns_servers.AddrArray[0].MaxSa, &dns_addr, sizeof(dns_addr));
-		req.pDnsServerList = &dns_servers;
+		dns_servers.AddrArray[0] = inet_addr(dns_server_ip.c_str());
 		auto future = std::async(std::launch::async, [&]() -> std::pair<bool, DNS_RECORD*> {
 			DNS_RECORD* results_custom_local = nullptr;
-			DNS_STATUS status_local = DnsQuery_A(hostname.c_str(), DNS_TYPE_A, DNS_QUERY_STANDARD, &req, &results_custom_local, nullptr);
+			DNS_STATUS status_local = DnsQuery_A(
+				hostname.c_str(),
+				DNS_TYPE_A,
+				DNS_QUERY_STANDARD,
+				&dns_servers,
+				&results_custom_local,
+				nullptr);
 			bool success = (status_local == ERROR_SUCCESS && results_custom_local != nullptr);
 			return { success, results_custom_local };
 			});

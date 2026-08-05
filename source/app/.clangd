@@ -6,6 +6,7 @@ CompileFlags:
   - -DWINVER=0x0A00
   - --target=x86_64-w64-windows-gnu
   - -std=c++17
+  - -stdlib=libstdc++
   - --gcc-toolchain=/usr/lib/gcc/x86_64-w64-mingw32/14-posix
   # forcibly include standard include locations from mingw, g++, 
   - -isystem
