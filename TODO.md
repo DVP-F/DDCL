@@ -33,38 +33,21 @@
 
 | Action                   | Information                                 | Done? |
 |:-------------------------|:--------------------------------------------|:-----:|
-| LLM review               | Implemented critical fixes                  |   X   |
-| Cleanup                  | Remove unused / unneeded function           |   X   |
-| Cleanup                  | Use `detection_kinds`                       |   X   |
-| Reorganize repo          | Update paths                                |   X   |
 | Human review of DDCL.cpp | Semantic logic                              |Delayed|
 | Update scripts           | Based on installer.py / compile_package.bat |       |
 | Testing DDCL.exe         | Full use test                               |       |
-| Testing DDCL.exe         | Endurance                                   |   X   |
-| Testing DDCL.exe         | Commandline arguments                       |   X   |
-| Hardware tests           | Timing of updates                           |   X   |
 | Hardware tests           | Stability                                   |       |
-| Hardware tests           | RAM and CPU use                             |   X   |
-| Installers               | Write to correct location (MSI)             |   X   |
-| Installers               | Test registry key writes and %PATH% update  |   X   |
-| Installers               | Check .lnk write                            |   X   |
 | Pre-production use       | Viability in active consumer use            |       |
 | Pre-production use       | Usability, configurability, log files.      |       |
 | Pre-production use       | Registry key use                            |       |
 | Pre-production use       | Commandline use                             |       |
-| Prep for use in-prod     | Clear out files and old remains             |   X   |
 | Prep for use in-prod     | Update documentation                        |       |
 | Prep for use in-prod     | Technical docs                              |       |
-| Prep for use in-prod     | Reset git log                               |   X   |
-| Prep for use in-prod     | Publish repository                          |   X   |
-| Prep for use in-prod     | Package archives and binaries               |   X   |
-| Prep for use in-prod     | Release and distribute                      |   X   |
 | Rewrite `installer.py`   | Rust, C, Zig?                               |       |
 | Redo (un)install         | uninstall.cpp                               |       |
 | Redo (un)install         | Update msi script                           |       |
 | Redo (un)install         | Update packaging scripts                    |       |
 | TUI                      | Auto-resize window size                     |       |
-| Data update TODOs        | Line 1094 + 590 TODO                        |   X   |
 
 ADD reg write from msi 'InstallType' and use to direct (un)install instead of args
 
