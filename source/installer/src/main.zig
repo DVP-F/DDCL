@@ -260,6 +260,82 @@ fn addShortcut(arena: std.mem.Allocator, installDir: std.fs.path) bool {
     return true;
 }
 
+fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
+    const subkey = std.unicode.utf8ToUtf16LeStringLiteral("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment");
+    const value_name = std.unicode.utf8ToUtf16LeStringLiteral("Path");
+    // Read HKLM\...\Environment\Path.
+    var key: windows.HKEY = undefined;
+    var status = windows.advapi32.RegOpenKeyExW(
+        windows.HKEY_LOCAL_MACHINE,
+        subkey.ptr,
+        0,
+        windows.KEY_READ | windows.KEY_WOW64_64KEY,
+        &key,
+    );
+    if (status != .SUCCESS) return error.RegOpenKeyFailed;
+    defer _ = windows.advapi32.RegCloseKey(key);
+    var utf16_buffer: [32768]u16 = undefined;
+    var byte_count: u32 = @intCast(utf16_buffer.len * @sizeOf(u16));
+    var registry_type: u32 = 0;
+    status = windows.advapi32.RegQueryValueExW(
+        key,
+        value_name.ptr,
+        null,
+        &registry_type,
+        @ptrCast(&utf16_buffer),
+        &byte_count,
+    );
+    if (status != .SUCCESS) return error.RegQueryValueFailed;
+    var utf16_len: usize = @intCast(byte_count / @sizeOf(u16));
+    if (utf16_len > 0 and utf16_buffer[utf16_len - 1] == 0) { utf16_len -= 1; }
+    const current = try std.unicode.utf16LeToUtf8Alloc(arena, utf16_buffer[0..utf16_len]);
+    // Check whether the entry already exists.
+    var entries = std.mem.splitScalar(u8, current, ';');
+    while (entries.next()) |entry_raw| {
+        var entry = std.mem.trim(u8, entry_raw, " \t");
+        var target = wanted;
+        while (entry.len > 3 and (entry[entry.len - 1] == '\\' or entry[entry.len - 1] == '/')) {
+            entry = entry[0 .. entry.len - 1];
+        }
+        while (target.len > 3 and (target[target.len - 1] == '\\' or target[target.len - 1] == '/')) {
+            target = target[0 .. target.len - 1];
+        }
+        if (std.ascii.eqlIgnoreCase(entry, target)) {
+            return false;
+        }
+    }
+    const updated = try std.fmt.allocPrint(
+        arena,
+        "{s}{s}{s}",
+        .{
+            current,
+            if (current.len == 0) "" else ";",
+            wanted,
+        },
+    );
+    // Write the modified value back to the same registry key.
+    const updated_utf16 = try std.unicode.utf8ToUtf16LeAlloc(arena, updated);
+    status = windows.advapi32.RegOpenKeyExW(
+        windows.HKEY_LOCAL_MACHINE,
+        subkey.ptr,
+        0,
+        windows.KEY_SET_VALUE | windows.KEY_WOW64_64KEY,
+        &key,
+    );
+    if (status != .SUCCESS) return error.RegOpenKeyFailed;
+    defer _ = windows.advapi32.RegCloseKey(key);
+    status = windows.advapi32.RegSetValueExW(
+        key,
+        value_name.ptr,
+        0,
+        registry_type,
+        @ptrCast(updated_utf16.ptr),
+        @intCast((updated_utf16.len + 1) * @sizeOf(u16)),
+    );
+    if (status != .SUCCESS) return error.RegSetValueFailed;
+    return true;
+}
+
 fn _doTasks(arena: std.mem.Allocator) !void {
     const installDir: []u8 = try getInstallDir(arena);
     defer arena.free(installDir); // also shuts up about unused const
@@ -267,6 +343,8 @@ fn _doTasks(arena: std.mem.Allocator) !void {
     defer arena.free(lnkStatus);
     const regStatus: bool = editRegistry(installDir);
     defer arena.free(regStatus);
+    const pathStatus: bool = try ensurePath(arena, installDir);
+    defer arena.free(pathStatus);
 
 }
 
