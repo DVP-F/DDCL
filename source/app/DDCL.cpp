@@ -5,6 +5,7 @@
 // See `NOTICE.txt` for further Licensing information
 
 #define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 
 #include <cstddef>
 #include <array>
@@ -22,7 +23,10 @@
 #include <locale>
 #include <sstream>
 #include <string>
+#pragma clang diagnostic push
+#pragma clang system_header
 #include <userenv.h>
+#pragma clang diagnostic pop
 #include <thread>
 #include "toml.hpp" // https://github.com/marzer/tomlplusplus/blob/v3.4.0/toml.hpp - Copyright (c) Mark Gillard <mark.gillard@outlook.com.au>
 #include <vector>
@@ -30,7 +34,7 @@
 #include <wlanapi.h>
 #include <objbase.h>
 #include <wtsapi32.h>
-#include <Lmcons.h>
+// #include <Lmcons.h>
 #include <optional>
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -778,9 +782,9 @@ void GetNetworkInfo() {
 		auto GetMetric = [](const IP_ADAPTER_ADDRESSES* p) {
 			ULONG metric = ULONG_MAX;
 			if (p->Ipv4Metric)
-				metric = min(metric, p->Ipv4Metric);
+				metric = std::min(metric, p->Ipv4Metric);
 			if (p->Ipv6Metric)
-				metric = min(metric, p->Ipv6Metric);
+				metric = std::min(metric, p->Ipv6Metric);
 			return metric;
 		};
 		auto IsCandidate = [](const IP_ADAPTER_ADDRESSES* p) {
@@ -1856,8 +1860,8 @@ void PrepareTerminal(short rows) {
         currentCols = MIN_WIDTH;
     if (currentRows <= 0)
         currentRows = 25;
-    short targetRows = max(currentRows, rows);
-    short targetCols = max(currentCols, MIN_WIDTH);
+    short targetRows = std::max(currentRows, rows);
+    short targetCols = std::max(currentCols, MIN_WIDTH);
     // Nothing to do
     if (targetRows == currentRows && targetCols == currentCols)
         return;
@@ -2095,12 +2099,12 @@ int main(int argc, char* argv[]) {
 				status_check(true); // perform a status check without logging
 				// Also clamp sleep time to 0 <= ... <= 1 seconds VERY defensively 
 				// - this keeps the loop timing as synchronized as possible without starting on multithreading
-				std::this_thread::sleep_for(max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - min(std::chrono::seconds{ 1 }, time_end - loop_start)));
+				std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, time_end - loop_start)));
 				// do not continue execution, do a new loop
 				continue;
 			}
 			status_check();
-			std::this_thread::sleep_for(max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - min(std::chrono::seconds{ 1 }, time_end - loop_start)));
+			std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, time_end - loop_start)));
 		}
 		WSACleanup();
 		std::cout << WRAP; std::cout.flush();
