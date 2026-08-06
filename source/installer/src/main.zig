@@ -1,5 +1,4 @@
 const std = @import("std");
-const Io = std.Io;
 const windows = std.os.windows;
 
 const installer = @import("installer");
@@ -357,7 +356,7 @@ fn _fallbackRegUpdate() !void {
     _ = try child.spawnAndWait();
 }
 
-fn onFail(writer: *Io.Writer, err: anyerror) !void {
+fn onFail(writer: std.fs.File.Writer, err: anyerror) !void {
     std.debug.print("Error: {}\n", .{err});
     try writer.print(
         \\Installation failed - registry marked as failed (InstallStatus=1).
@@ -391,7 +390,7 @@ fn onFail(writer: *Io.Writer, err: anyerror) !void {
     }
 }
 
-fn onSuccess(writer: *Io.Writer) !void {
+fn onSuccess(writer: std.fs.File.Writer) !void {
     try writer.print(\\
         \\Installation completed successfully!
         \\echo - Registry keys created under HKLM\SOFTWARE\DDCL
@@ -430,12 +429,16 @@ fn _isMsiInstall() !bool {
     return false;
 }
 
-pub fn main(init: std.process.Init) !void {
-    const arena: std.mem.Allocator = init.arena.allocator();
-    const io: Io = init.io;
+pub fn main() !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const gpa_allocator = gpa.allocator();
+    var arena_alloc = std.heap.ArenaAllocator.init(gpa_allocator);
+    defer arena_alloc.deinit();
+    const arena: std.mem.Allocator = arena_alloc.allocator();
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
-    const stdout_writer: *Io.Writer = &stdout_file_writer.interface;
+    var stdout_file = std.io.getStdOut().writer();
+    const stdout_writer = &stdout_file;
     MSI_INSTALL = try _isMsiInstall();
 
     try _doTasks(arena) catch |err| {
