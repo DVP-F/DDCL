@@ -61,12 +61,7 @@ fn _doGetInstallDir_CWD(arena: std.mem.Allocator) ![]u8 {
             try std.fs.path.join(arena, &.{
                 installDir,
                 "DDCL.exe"
-            }), .{}) catch |err| switch (err) {
-            error.FileNotFound => {
-                std.debug.print("File does not exist\n", .{});
-                return;
-            }, else => return err,
-        }
+            }), .{})
     ) {
         return installDir;
     } {
