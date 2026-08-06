@@ -2099,12 +2099,12 @@ int main(int argc, char* argv[]) {
 				status_check(true); // perform a status check without logging
 				// Also clamp sleep time to 0 <= ... <= 1 seconds VERY defensively 
 				// - this keeps the loop timing as synchronized as possible without starting on multithreading
-				std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, time_end - loop_start)));
+				std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, std::chrono::duration_cast<std::chrono::seconds>(time_end - loop_start))));
 				// do not continue execution, do a new loop
 				continue;
 			}
 			status_check();
-			std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, time_end - loop_start)));
+			std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, std::chrono::duration_cast<std::chrono::seconds>(time_end - loop_start))));
 		}
 		WSACleanup();
 		std::cout << WRAP; std::cout.flush();
