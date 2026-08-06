@@ -23,10 +23,7 @@
 #include <locale>
 #include <sstream>
 #include <string>
-#pragma clang diagnostic push
-#pragma clang system_header
 #include <userenv.h>
-#pragma clang diagnostic pop
 #include <thread>
 #include "toml.hpp" // https://github.com/marzer/tomlplusplus/blob/v3.4.0/toml.hpp - Copyright (c) Mark Gillard <mark.gillard@outlook.com.au>
 #include <vector>
