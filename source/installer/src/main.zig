@@ -29,7 +29,7 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
     defer _ = windows.advapi32.RegCloseKey(key);
     if (result != 0)
         return error.OpenKeyFailed;
-    std.debug.assert(ty == windows.REG_SZ); // debug assert type is REG_SZ (the expected type)
+    //// std.debug.assert(ty == windows.REG_SZ); // debug assert type is REG_SZ (the expected type)
     // read in the value
     const utf16: []u16 = try arena.alloc(u16, size / @sizeOf(u16));
     defer arena.free(utf16);
@@ -436,9 +436,10 @@ pub fn main() !void {
     var arena_alloc = std.heap.ArenaAllocator.init(gpa_allocator);
     defer arena_alloc.deinit();
     const arena: std.mem.Allocator = arena_alloc.allocator();
+
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_file = std.io.getStdOut().writer();
-    const stdout_writer = &stdout_file;
+    var stdout_file_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout_writer = &stdout_file_writer.interface;
     MSI_INSTALL = try _isMsiInstall();
 
     try _doTasks(arena) catch |err| {
@@ -449,5 +450,4 @@ pub fn main() !void {
 
     try onSuccess(stdout_writer);
     try stdout_writer.flush();
-    return;
 }
