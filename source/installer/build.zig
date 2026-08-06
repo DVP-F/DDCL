@@ -8,9 +8,9 @@ const std = @import("std");
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
     //* alright we start with a bangin' guard against building with the wrong zig verision.
-    const required_zig = "0.15.0";
+    const required_zig = "0.15.2";
     if (!std.mem.eql(u8, @import("builtin").zig_version_string, required_zig)) {
-        @panic("Installer build requires Zig 0.15.0 exactly. Newer Zig versions may have removed deprecated APIs.");
+        @panic("Installer build requires Zig 0.15.2 exactly. Newer Zig versions may have removed deprecated APIs.");
     }
 
     // Standard target options allow the person running `zig build` to choose

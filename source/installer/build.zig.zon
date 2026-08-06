@@ -26,7 +26,7 @@
     //// Tracks the earliest Zig version that the package considers to be a
     //// supported use case.
     // This is the only supported version of zig. so. yk. use it
-    .minimum_zig_version = "0.15.0",
+    .minimum_zig_version = "0.15.2",
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.

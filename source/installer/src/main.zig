@@ -5,7 +5,7 @@ const windows = std.os.windows;
 const installer = @import("installer");
 var MSI_INSTALL: bool = undefined;
 
-//? Requires Zig 0.15.x.
+//? Requires Zig 0.15.2
 //? std.os.windows.advapi32 registry wrappers were removed in, and 
   //? std.fs.cwd() operations here are deprecated in, versions >=0.16.0
 
