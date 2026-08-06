@@ -8,7 +8,7 @@
 #define NOMINMAX
 
 #include <cstddef>
-#include <array>
+// #include <array>
 #include <atomic>
 #include <algorithm>
 #include <chrono>
@@ -992,7 +992,7 @@ static SessionInfo getLocalSessionInfo(bool firstRun = false) {
 	return activeUser;
 }
 
-const enum class status_change_type {
+enum class status_change_type {
 	internet_connectivity,
 	ethernet,
 	wlan,
@@ -1412,6 +1412,12 @@ static void status_check(bool nowrite = false) {
 					if (!nowrite) { log_change(status_change_type::ethernet, c_time); }
 				}
 				continue;
+			case status_change_type::wlan:
+				// use overloaded op
+				if (curr_WLANInfo != prev_WLANInfo) {
+					if (!nowrite) { log_change(status_change_type::wlan, c_time); }
+				}
+				continue;
 			case status_change_type::vpn_connection:
 				if (curr_vpn_host.connected != prev_vpn_host.connected ||
 					curr_vpn_host.hostname != prev_vpn_host.hostname) {
@@ -1806,6 +1812,9 @@ static void print_config_summary(char* choice) {
 				break;
 			case status_change_type::ethernet:
 				std::cout << "Ethernet, ";
+				break;
+			case status_change_type::wlan:
+				std::cout << "WLAN, ";
 				break;
 			case status_change_type::dns_resolution:
 				std::cout << "DNS Resolution, ";
