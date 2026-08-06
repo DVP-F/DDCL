@@ -52,33 +52,43 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
 
 fn _doGetInstallDir_CWD(arena: std.mem.Allocator) ![]u8 {
     // current directory is plausible
-    var installDir = try std.process.getEnvVarOwned(arena, "cd");
+    var installDir: []u8 = try std.process.getEnvVarOwned(arena, "cd");
     defer arena.free(installDir);
     // see if executable is here
-    if (
+    if (blk: {
         //? this check is only performed twice so im not bothering to make it its own fn
-        try std.fs.cwd().access(
+        std.fs.cwd().access(
             try std.fs.path.join(arena, &.{
                 installDir,
-                "DDCL.exe"
-            }), .{})
-    ) {
+                "DDCL.exe",
+            }), .{}, )
+        catch |err| {
+            if (err != error.FileNotFound) {
+                return err;
+            }
+            break :blk false; // FileNotFound
+        };
+        break :blk true; // access succeeded
+    }) {
         return installDir;
     } {
         // else try the default install path of the MSI
-        installDir = "C:\\Program Files\\DDCL";
-        if (
-            try std.fs.cwd().access(
+        installDir = try arena.dupe(u8, "C:\\Program Files\\DDCL");
+        if (blk: {
+            std.fs.cwd().access(
                 try std.fs.path.join(arena, &.{
                     installDir,
                     "DDCL.exe"
-                }), .{}) catch |err| switch (err) {
-                error.FileNotFound => {
-                    std.debug.print("File does not exist\n", .{});
-                    return;
-                }, else => return err,
-            }
-        ) {
+                }), .{})
+            catch |err| {
+                if (err != error.FileNotFound) {
+                    return err;
+                }
+                std.debug.print("File does not exist\n", .{});
+                break :blk false; // FileNotFound
+            };
+            break :blk true; // access succeeded
+        }) {
             return installDir;
         }
     }
@@ -210,7 +220,7 @@ fn editRegistry(installDir: []u8) bool {
 //     );
 //     }
 
-fn _doAddShortcut(arena: std.mem.Allocator, installDir: std.fs.path) !void {
+fn _doAddShortcut(arena: std.mem.Allocator, installDir: []u8) !void {
     //* let errors propagate out
     // first off create the directory
     try std.fs.cwd().makePath("C:\\ProgramData\\Microsoft\\Windows\\tart Menu\\Programs\\DDCL");
@@ -245,7 +255,7 @@ fn _doAddShortcut(arena: std.mem.Allocator, installDir: std.fs.path) !void {
     try std.fs.cwd().deleteFile(spath);
 }
 
-fn addShortcut(arena: std.mem.Allocator, installDir: std.fs.path) bool {
+fn addShortcut(arena: std.mem.Allocator, installDir: []u8) bool {
     _doAddShortcut(arena, installDir) catch |err| {
         // still return a bool on failure
         std.debug.print("Error: {}\n", .{err});
