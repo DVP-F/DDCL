@@ -5,8 +5,9 @@ const windows = std.os.windows;
 const installer = @import("installer");
 var MSI_INSTALL: bool = undefined;
 
-//? real quick: im aware that std.fs.cwd() use is deprecated since 0.16 zig. IDC tho!
-//? im not gonna make this more complicated for myself
+//? Requires Zig 0.15.x.
+//? std.os.windows.advapi32 registry wrappers were removed in, and 
+  //? std.fs.cwd() operations here are deprecated in, versions >=0.16.0
 
 //* if i need a temp allocator:
 // var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
