@@ -4,3 +4,7 @@ dist/*
 # Set up for easier custom building
 compile/compile_package_*.bat
 source/app/*.toml
+
+# zig build dirs
+*.zig-cache*
+source/*/.zig-cache/*

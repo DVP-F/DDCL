@@ -336,7 +336,7 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
     return true;
 }
 
-fn _doTasks(arena: std.mem.Allocator) !void {
+fn _doTasks(arena: std.mem.Allocator) !?bool {
     const installDir: []u8 = try getInstallDir(arena);
     defer arena.free(installDir); // also shuts up about unused const
     const lnkStatus: bool = addShortcut(arena, installDir);
@@ -345,7 +345,6 @@ fn _doTasks(arena: std.mem.Allocator) !void {
     defer arena.free(regStatus);
     const pathStatus: bool = try ensurePath(arena, installDir);
     defer arena.free(pathStatus);
-
 }
 
 fn _fallbackRegUpdate() !void {
