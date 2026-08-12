@@ -1,6 +1,19 @@
 const std = @import("std");
 const windows = std.os.windows;
 
+// manually add regsetvalueexw like a PEASANT.
+extern "advapi32" fn RegSetValueExW(
+    hKey: windows.HKEY,
+    lpValueName: ?windows.LPCWSTR,
+    Reserved: u32,
+    dwType: u32,
+    lpData: [*]const u8,
+    cbData: u32,
+) callconv(.winapi) windows.LSTATUS;
+
+// and reg_dword
+const REG_DWORD: u32 = 4;
+
 const installer = @import("installer");
 var MSI_INSTALL: bool = undefined;
 
@@ -277,7 +290,7 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
         windows.KEY_READ | windows.KEY_WOW64_64KEY,
         &key,
     );
-    if (status != .SUCCESS) return error.RegOpenKeyFailed;
+    if (status != 0) return error.RegOpenKeyFailed;
     defer _ = windows.advapi32.RegCloseKey(key);
     var utf16_buffer: [32768]u16 = undefined;
     var byte_count: u32 = @intCast(utf16_buffer.len * @sizeOf(u16));
@@ -290,7 +303,7 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
         @ptrCast(&utf16_buffer),
         &byte_count,
     );
-    if (status != .SUCCESS) return error.RegQueryValueFailed;
+    if (status != 0) return error.RegQueryValueFailed;
     var utf16_len: usize = @intCast(byte_count / @sizeOf(u16));
     if (utf16_len > 0 and utf16_buffer[utf16_len - 1] == 0) { utf16_len -= 1; }
     const current = try std.unicode.utf16LeToUtf8Alloc(arena, utf16_buffer[0..utf16_len]);
@@ -327,9 +340,9 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
         windows.KEY_SET_VALUE | windows.KEY_WOW64_64KEY,
         &key,
     );
-    if (status != .SUCCESS) return error.RegOpenKeyFailed;
+    if (status != 0) return error.RegOpenKeyFailed;
     defer _ = windows.advapi32.RegCloseKey(key);
-    status = windows.advapi32.RegSetValueExW(
+    status = RegSetValueExW(
         key,
         value_name.ptr,
         0,
@@ -337,11 +350,11 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
         @ptrCast(updated_utf16.ptr),
         @intCast((updated_utf16.len + 1) * @sizeOf(u16)),
     );
-    if (status != .SUCCESS) return error.RegSetValueFailed;
+    if (status != 0) return error.RegSetValueFailed;
     return true;
 }
 
-fn _doTasks(arena: std.mem.Allocator) !?bool {
+fn _doTasks(arena: std.mem.Allocator) !bool {
     const installDir: []u8 = try getInstallDir(arena);
     defer arena.free(installDir); // also shuts up about unused const
     const lnkStatus: bool = addShortcut(arena, installDir);
@@ -350,6 +363,7 @@ fn _doTasks(arena: std.mem.Allocator) !?bool {
     defer arena.free(regStatus);
     const pathStatus: bool = try ensurePath(arena, installDir);
     defer arena.free(pathStatus);
+    return (lnkStatus & regStatus & pathStatus & (installDir.len != 0));
 }
 
 fn _fallbackRegUpdate() !void {
@@ -361,10 +375,11 @@ fn _fallbackRegUpdate() !void {
     _ = try child.spawnAndWait();
 }
 
-fn onFail(writer: std.fs.File.Writer, err: anyerror) !void {
+fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
     std.debug.print("Error: {}\n", .{err});
     try writer.print(
-        \\Installation failed - registry marked as failed (InstallStatus=1).
+        "Installation failed - registry marked as failed (InstallStatus=1).",
+        .{},
     );
     var key: windows.HKEY = undefined;
     const result = windows.advapi32.RegOpenKeyExW(
@@ -379,11 +394,11 @@ fn onFail(writer: std.fs.File.Writer, err: anyerror) !void {
     } {
         defer _ = windows.advapi32.RegCloseKey(key);
         const value: windows.DWORD = 1;
-        const set_result = windows.advapi32.RegSetValueExW(
+        const set_result = RegSetValueExW(
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("InstallStatus"),
             0,
-            windows.REG_DWORD,
+            REG_DWORD,
             @ptrCast(&value),
             @sizeOf(windows.DWORD),
         );
@@ -395,13 +410,15 @@ fn onFail(writer: std.fs.File.Writer, err: anyerror) !void {
     }
 }
 
-fn onSuccess(writer: std.fs.File.Writer) !void {
+fn onSuccess(writer: *std.Io.Writer) !void {
     try writer.print(\\
         \\Installation completed successfully!
         \\echo - Registry keys created under HKLM\SOFTWARE\DDCL
         \\echo - Start Menu shortcut added
         \\echo - PATH updated (restart required for new sessions)
         \\
+        ,
+        .{},
     );
 }
 
@@ -447,7 +464,7 @@ pub fn main() !void {
     const stdout_writer = &stdout_file_writer.interface;
     MSI_INSTALL = try _isMsiInstall();
 
-    try _doTasks(arena) catch |err| {
+    _ = _doTasks(arena) catch |err| {
         try onFail(stdout_writer, err);
         try stdout_writer.flush();
         return;
