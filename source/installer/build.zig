@@ -7,10 +7,10 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
-    //* alright we start with a bangin' guard against building with the wrong zig verision.
+    //* alright we start with a bangin' guard against building with the wrong zig version.
     const required_zig = "0.15.2";
     if (!std.mem.eql(u8, @import("builtin").zig_version_string, required_zig)) {
-        @panic("Installer build requires Zig 0.15.2 exactly. Newer Zig versions may have removed deprecated APIs.");
+        @panic("Installer build requires Zig 0.15.2 exactly. Other versions are likely to be incompatible.");
     }
 
     // Standard target options allow the person running `zig build` to choose
@@ -74,8 +74,14 @@ pub fn build(b: *std.Build) void {
         }),
     });
     exe.root_module.addImport("installer", mod);
+
     // add advapi32.dll for linking
     exe.root_module.linkSystemLibrary("advapi32", .{});
+
+    // add a resource file to tell windows this should run with admin privilege
+    exe.addWin32ResourceFile(.{
+        .file = b.path("manifest.rc"),
+    });
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default

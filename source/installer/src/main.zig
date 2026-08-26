@@ -150,20 +150,31 @@ fn _doEditRegistry(installDir: []const u8) !void {
     defer std.heap.page_allocator.free(installDir16);
     {
         var key: c.HKEY = undefined;
-        // TODO: run if not msi install, else use regopenkeyexw
-        const result = RegCreateKeyExW(
-            HKLM,
-            std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
-            0,
-            null,
-            0,
-            access,
-            null,
-            &key,
-            null,
-        );
-        if (result != 0)
-            return error.CreateKeyFailed;
+        if (!MSI_INSTALL) {
+            const result = RegCreateKeyExW(
+                HKLM,
+                std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+                0,
+                null,
+                0,
+                access,
+                null,
+                &key,
+                null,
+            );
+            if (result != 0)
+                return error.CreateKeyFailed;
+        } else {
+            const result = RegOpenKeyExW(
+                HKLM,
+                std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+                0,
+                access,
+                &key,
+            );
+            if (result != 0)
+                return error.OpenKeyFailed;
+        }
         defer _ = c.RegCloseKey(key);
         var set_result = c.RegSetValueExW(
             key,
@@ -195,7 +206,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
             ),
             0,
-            c.KEY_WRITE | c.KEY_WOW64_64KEY,
+            access,
             &key,
         );
         if (result != 0)
@@ -376,10 +387,11 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
 }
 
 fn _doTasks(arena: std.mem.Allocator) !bool {
-    const installDir: []u8 = try getInstallDir(arena);                        defer arena.free(installDir);
-    const lnkStatus: bool = addShortcut(arena, installDir); defer arena.free(lnkStatus);
-    const regStatus: bool = editRegistry(installDir);                         defer arena.free(regStatus);
-    const pathStatus: bool = try ensurePath(arena, installDir); defer arena.free(pathStatus);
+    const installDir: []u8 = try getInstallDir(arena);
+        defer arena.free(installDir);
+    const lnkStatus: bool = addShortcut(arena, installDir);
+    const regStatus: bool = editRegistry(installDir);
+    const pathStatus: bool = try ensurePath(arena, installDir);
     return (lnkStatus & regStatus & pathStatus & (installDir.len != 0));
 }
 
@@ -430,7 +442,7 @@ fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
 fn onSuccess(writer: *std.Io.Writer) !void {
     try writer.print(\\
         \\Installation completed successfully!
-        \\echo - Registry keys created under @ptrCast(@alignCast(HKLM))\SOFTWARE\DDCL
+        \\echo - Registry keys created under HKLM\SOFTWARE\DDCL
         \\echo - Start Menu shortcut added
         \\echo - PATH updated (restart required for new sessions)
         \\
