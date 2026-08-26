@@ -128,6 +128,8 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .pic = true,
+            .link_libc = true,
         }),
     });
     exe_tests.root_module.addImport("installer", mod);

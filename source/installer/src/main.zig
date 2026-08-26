@@ -1,19 +1,22 @@
 const std = @import("std");
-
 const c = @cImport({
     @cDefine("WIN32_LEAN_AND_MEAN", "1");
     @cInclude("windows.h");
 });
 
-// and reg consts
+//? Requires Zig 0.15.2
+//? std.fs.cwd() operations here are deprecated in versions >=0.16.0
+//? and the entirety of the file is written for 0.15.2 jank which will NOT be updated bc i hate working on this
+
+// and reg consts for compat
 const REG_DWORD: c.DWORD = 4;
 const REG_SZ: c.DWORD = 1;
 const HKLM: usize = 0x80000002;
 const HKCU: usize = 0x80000001;
 
-// HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER are Win32 predefined pseudo-handles (0x80000002 and 0x80000001 respectively).
-// Zig 0.15.2's @cImport represents HKEY as an aligned C pointer ([*c]struct_HKEY__) and therefore cannot represent this value directly.
-// Keep the root handle as usize and use the ABI-compatible function signature below.
+//* HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER are Win32 predefined pseudo-handles (0x80000002 and 0x80000001 respectively).
+//* Zig 0.15.2's @cImport represents HKEY as an aligned C pointer ([*c]struct_HKEY__) and therefore cannot represent this value directly.
+//* Keep the root handle as usize and use the ABI-compatible function signature below.
 
 const RegCreateKeyExW = @as(*const fn (
     usize,
@@ -37,10 +40,6 @@ const RegOpenKeyExW = @as(*const fn (
 
 const installer = @import("installer");
 var MSI_INSTALL: bool = undefined;
-
-//? Requires Zig 0.15.2
-//? std.os.windows (.advapi32) registry wrappers were removed in, and 
-  //? std.fs.cwd() operations here are deprecated in, versions >=0.16.0
 
 //* if i need a temp allocator:
 // var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -151,6 +150,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
     defer std.heap.page_allocator.free(installDir16);
     {
         var key: c.HKEY = undefined;
+        // TODO: run if not msi install, else use regopenkeyexw
         const result = RegCreateKeyExW(
             HKLM,
             std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
@@ -376,11 +376,10 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
 }
 
 fn _doTasks(arena: std.mem.Allocator) !bool {
-    const installDir: []u8 = try getInstallDir(arena);
-    defer arena.free(installDir); // also shuts up about unused const
-    const lnkStatus: bool = addShortcut(arena, installDir);
-    const regStatus: bool = editRegistry(installDir);
-    const pathStatus: bool = try ensurePath(arena, installDir);
+    const installDir: []u8 = try getInstallDir(arena);                        defer arena.free(installDir);
+    const lnkStatus: bool = addShortcut(arena, installDir); defer arena.free(lnkStatus);
+    const regStatus: bool = editRegistry(installDir);                         defer arena.free(regStatus);
+    const pathStatus: bool = try ensurePath(arena, installDir); defer arena.free(pathStatus);
     return (lnkStatus & regStatus & pathStatus & (installDir.len != 0));
 }
 
