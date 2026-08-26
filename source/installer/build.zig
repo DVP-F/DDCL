@@ -68,7 +68,7 @@ pub fn build(b: *std.Build) void {
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
-            .optimize = optimize,
+            .optimize = .ReleaseSmall,
             .pic = true,
             .link_libc = true,
         }),
@@ -138,9 +138,15 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
-    exe_tests.root_module.addImport("installer", mod);
+    exe.root_module.addImport("installer", mod);
+
     // add advapi32.dll for linking
-    exe_tests.root_module.linkSystemLibrary("advapi32", .{});
+    exe.root_module.linkSystemLibrary("advapi32", .{});
+
+    // add a resource file to tell windows this should run with admin privilege
+    exe.addWin32ResourceFile(.{
+        .file = b.path("manifest.rc"),
+    });
 
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
