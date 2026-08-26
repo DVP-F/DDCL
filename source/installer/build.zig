@@ -70,9 +70,14 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
             .pic = true,
+            .link_libc = true,
         }),
     });
     exe.root_module.addImport("installer", mod);
+    // add advapi32.dll for linking
+    exe.root_module.linkSystemLibrary("advapi32", .{});
+    // and local winapi helper
+    exe.root_module.addIncludePath(b.path("src"));
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -128,6 +133,8 @@ pub fn build(b: *std.Build) void {
         }),
     });
     exe_tests.root_module.addImport("installer", mod);
+    // add advapi32.dll for linking
+    exe_tests.root_module.linkSystemLibrary("advapi32", .{});
 
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);

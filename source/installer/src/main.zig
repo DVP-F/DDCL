@@ -1,24 +1,19 @@
 const std = @import("std");
-const windows = std.os.windows;
 
-// manually add regsetvalueexw like a PEASANT.
-extern "advapi32" fn RegSetValueExW(
-    hKey: windows.HKEY,
-    lpValueName: ?windows.LPCWSTR,
-    Reserved: u32,
-    dwType: u32,
-    lpData: [*]const u8,
-    cbData: u32,
-) callconv(.winapi) windows.LSTATUS;
+const c = @cImport({
+    @cDefine("WIN32_LEAN_AND_MEAN", "1");
+    @cInclude("windows.h");
+    @cInclude("winapi_helper.h");
+});
 
 // and reg_dword
-const REG_DWORD: u32 = 4;
+const REG_DWORD: c.DWORD = 4;
 
 const installer = @import("installer");
 var MSI_INSTALL: bool = undefined;
 
 //? Requires Zig 0.15.2
-//? std.os.windows.advapi32 registry wrappers were removed in, and 
+//? std.os.windows (.advapi32) registry wrappers were removed in, and 
   //? std.fs.cwd() operations here are deprecated in, versions >=0.16.0
 
 //* if i need a temp allocator:
@@ -27,11 +22,11 @@ var MSI_INSTALL: bool = undefined;
 // const allocator: std.mem.Allocator = arena.allocator();
 
 fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
-    const key: windows.HKEY = undefined;
-    var ty: windows.DWORD = undefined;
+    const key: c.HKEY = undefined;
+    var ty: c.DWORD = undefined;
     // get the required size of u16 array
-    var size: windows.DWORD = 0;
-    var result = windows.advapi32.RegQueryValueExW(
+    var size: c.DWORD = 0;
+    var result = c.RegQueryValueExW(
         key,
         std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
         null,
@@ -39,14 +34,14 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
         null,
         &size,
     );
-    defer _ = windows.advapi32.RegCloseKey(key);
+    defer _ = c.RegCloseKey(key);
     if (result != 0)
         return error.OpenKeyFailed;
     //// std.debug.assert(ty == windows.REG_SZ); // debug assert type is REG_SZ (the expected type)
     // read in the value
     const utf16: []u16 = try arena.alloc(u16, size / @sizeOf(u16));
     defer arena.free(utf16);
-    result = windows.advapi32.RegQueryValueExW(
+    result = c.RegQueryValueExW(
         key,
         std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
         null,
@@ -122,16 +117,16 @@ fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
 }
 
 fn _doEditRegistry(installDir: []const u8) !void {
-    const access = windows.KEY_WRITE | windows.KEY_WOW64_64KEY;
+    const access = c.KEY_WRITE | c.KEY_WOW64_64KEY;
     const installDir16 = try std.unicode.utf8ToUtf16LeAlloc(
         std.heap.page_allocator,
         installDir,
     );
     defer std.heap.page_allocator.free(installDir16);
     {
-        var key: windows.HKEY = undefined;
-        const result = windows.advapi32.RegCreateKeyExW(
-            windows.HKEY_LOCAL_MACHINE,
+        var key: c.HKEY = undefined;
+        const result = c.RegCreateKeyExW(
+            c.ddcl_hkey_local_machine(),
             std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
             0,
             null,
@@ -143,48 +138,48 @@ fn _doEditRegistry(installDir: []const u8) !void {
         );
         if (result != 0)
             return error.CreateKeyFailed;
-        defer _ = windows.advapi32.RegCloseKey(key);
-        var set_result = windows.advapi32.RegSetValueExW(
+        defer _ = c.RegCloseKey(key);
+        var set_result = c.RegSetValueExW(
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
             0,
-            windows.REG_SZ,
+            c.REG_SZ,
             @ptrCast(installDir16.ptr),
             @intCast(installDir16.len * @sizeOf(u16)),
         );
         if (set_result != 0)
             return error.SetValueFailed;
-        const value: windows.DWORD = 0;
-        set_result = windows.advapi32.RegSetValueExW(
+        const value: c.DWORD = 0;
+        set_result = c.RegSetValueExW(
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("InstallStatus"),
             0,
-            windows.REG_DWORD,
+            c.REG_DWORD,
             @ptrCast(&value),
-            @sizeOf(windows.DWORD),
+            @sizeOf(c.DWORD),
         );
         if (set_result != 0)
             return error.SetValueFailed;
     }
     {
-        var key: windows.HKEY = undefined;
-        const result = windows.advapi32.RegOpenKeyExW(
-            windows.HKEY_LOCAL_MACHINE,
+        var key: c.HKEY = undefined;
+        const result = c.RegOpenKeyExW(
+            c.ddcl_hkey_local_machine(),
             std.unicode.utf8ToUtf16LeStringLiteral(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
             ),
             0,
-            windows.KEY_WRITE | windows.KEY_WOW64_64KEY,
+            c.KEY_WRITE | c.KEY_WOW64_64KEY,
             &key,
         );
         if (result != 0)
             return error.OpenKeyFailed;
-        defer _ = windows.advapi32.RegCloseKey(key);
-        const set_result = windows.advapi32.RegSetValueExW(
+        defer _ = c.RegCloseKey(key);
+        const set_result = c.RegSetValueExW(
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("DDCL"),
             0,
-            windows.REG_SZ,
+            c.REG_SZ,
             @ptrCast(installDir16.ptr),
             @intCast(installDir16.len * @sizeOf(u16)),
         );
@@ -194,7 +189,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
 }
 
 fn editRegistry(installDir: []u8) bool {
-    try _doEditRegistry(installDir) catch {
+    _ = _doEditRegistry(installDir) catch {
         return false;
     };
     return true;
@@ -207,28 +202,28 @@ fn editRegistry(installDir: []u8) bool {
 //         "Software\\MyApp",
 //     );
 
-//     if (windows.advapi32.RegOpenKeyExW(
-//         windows.HKEY_CURRENT_USER,
+//     if (windows.c.RegOpenKeyExW(
+//         c.ddcl_hkey_current_user(),
 //         path,
 //         0,
 //         windows.KEY_WRITE | windows.KEY_WOW64_64KEY,
 //         &key,
 //     ) != 0) return;
 
-//     defer _ = windows.advapi32.RegCloseKey(key);
+//     defer _ = windows.c.RegCloseKey(key);
 
 //     const name = std.unicode.utf8ToUtf16LeStringLiteral(
 //         "Enabled",
 //     );
 
-//     _ = windows.advapi32.RegDeleteValueW(key, name);
+//     _ = windows.c.RegDeleteValueW(key, name);
 
 //     const path = std.unicode.utf8ToUtf16LeStringLiteral(
 //         "Software\\MyApp",
 //     );
 
-//     _ = windows.advapi32.RegDeleteKeyW(
-//         windows.HKEY_CURRENT_USER,
+//     _ = windows.c.RegDeleteKeyW(
+//         c.ddcl_hkey_current_user(),
 //         path,
 //     );
 //     }
@@ -282,20 +277,20 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
     const subkey = std.unicode.utf8ToUtf16LeStringLiteral("SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment");
     const value_name = std.unicode.utf8ToUtf16LeStringLiteral("Path");
     // Read HKLM\...\Environment\Path.
-    var key: windows.HKEY = undefined;
-    var status = windows.advapi32.RegOpenKeyExW(
-        windows.HKEY_LOCAL_MACHINE,
+    var key: c.HKEY = undefined;
+    var status = c.RegOpenKeyExW(
+        c.ddcl_hkey_local_machine(),
         subkey.ptr,
         0,
-        windows.KEY_READ | windows.KEY_WOW64_64KEY,
+        c.KEY_READ | c.KEY_WOW64_64KEY,
         &key,
     );
     if (status != 0) return error.RegOpenKeyFailed;
-    defer _ = windows.advapi32.RegCloseKey(key);
+    defer _ = c.RegCloseKey(key);
     var utf16_buffer: [32768]u16 = undefined;
     var byte_count: u32 = @intCast(utf16_buffer.len * @sizeOf(u16));
     var registry_type: u32 = 0;
-    status = windows.advapi32.RegQueryValueExW(
+    status = c.RegQueryValueExW(
         key,
         value_name.ptr,
         null,
@@ -333,16 +328,16 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
     );
     // Write the modified value back to the same registry key.
     const updated_utf16 = try std.unicode.utf8ToUtf16LeAlloc(arena, updated);
-    status = windows.advapi32.RegOpenKeyExW(
-        windows.HKEY_LOCAL_MACHINE,
+    status = c.RegOpenKeyExW(
+        c.ddcl_hkey_local_machine(),
         subkey.ptr,
         0,
-        windows.KEY_SET_VALUE | windows.KEY_WOW64_64KEY,
+        c.KEY_SET_VALUE | c.KEY_WOW64_64KEY,
         &key,
     );
     if (status != 0) return error.RegOpenKeyFailed;
-    defer _ = windows.advapi32.RegCloseKey(key);
-    status = RegSetValueExW(
+    defer _ = c.RegCloseKey(key);
+    status = c.RegSetValueExW(
         key,
         value_name.ptr,
         0,
@@ -369,7 +364,7 @@ fn _doTasks(arena: std.mem.Allocator) !bool {
 fn _fallbackRegUpdate() !void {
     // fallback to a guarded command.
     var child = std.process.Child.init(
-        &[_][]const u8{ "reg", "add", "\"HKEY_LOCAL_MACHINE\\SOFTWARE\\DDCL\"", "/v", "InstallStatus", "/t", "DWORD", "/d", "1", "/f", ">nul", "2>&1" },
+        &[_][]const u8{ "reg", "add", "c.ddcl_hkey_local_machine()\\SOFTWARE\\DDCL\"", "/v", "InstallStatus", "/t", "DWORD", "/d", "1", "/f", ">nul", "2>&1" },
         std.heap.page_allocator,
     );
     _ = try child.spawnAndWait();
@@ -381,26 +376,26 @@ fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
         "Installation failed - registry marked as failed (InstallStatus=1).",
         .{},
     );
-    var key: windows.HKEY = undefined;
-    const result = windows.advapi32.RegOpenKeyExW(
-        windows.HKEY_LOCAL_MACHINE,
+    var key: c.HKEY = undefined;
+    const result = c.RegOpenKeyExW(
+        c.ddcl_hkey_local_machine(),
         std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
         0,
-        windows.KEY_SET_VALUE | windows.KEY_WOW64_64KEY,
+        c.KEY_SET_VALUE | c.KEY_WOW64_64KEY,
         &key,
     );
     if (result != 0) {
         return error.OpenKeyFailed;
     } {
-        defer _ = windows.advapi32.RegCloseKey(key);
-        const value: windows.DWORD = 1;
-        const set_result = RegSetValueExW(
+        defer _ = c.RegCloseKey(key);
+        const value: c.DWORD = 1;
+        const set_result = c.RegSetValueExW(
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("InstallStatus"),
             0,
             REG_DWORD,
             @ptrCast(&value),
-            @sizeOf(windows.DWORD),
+            @sizeOf(c.DWORD),
         );
         if (set_result != 0) {
             return error.SetValueFailed;
@@ -423,20 +418,20 @@ fn onSuccess(writer: *std.Io.Writer) !void {
 }
 
 fn _isMsiInstall() !bool {
-    var key: windows.HKEY = undefined;
-    const result = windows.advapi32.RegOpenKeyExW(
-        windows.HKEY_LOCAL_MACHINE,
+    var key: c.HKEY = undefined;
+    const result = c.RegOpenKeyExW(
+        c.ddcl_hkey_local_machine(),
         std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
         0,
-        windows.KEY_QUERY_VALUE | windows.KEY_WOW64_64KEY,
+        c.KEY_QUERY_VALUE | c.KEY_WOW64_64KEY,
         &key,
     );
-    defer _ = windows.advapi32.RegCloseKey(key);
+    defer _ = c.RegCloseKey(key);
     if (result != 0)
         return error.OpenKeyFailed;
     var value: u32 = undefined;
-    var _value_size: windows.DWORD = @sizeOf(u32);
-    const query_result = windows.advapi32.RegQueryValueExW(
+    var _value_size: c.DWORD = @sizeOf(u32);
+    const query_result = c.RegQueryValueExW(
         key,
         std.unicode.utf8ToUtf16LeStringLiteral("InstallType"),
         null,
