@@ -442,9 +442,9 @@ fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
 fn onSuccess(writer: *std.Io.Writer) !void {
     try writer.print(\\
         \\Installation completed successfully!
-        \\echo - Registry keys created under HKLM\SOFTWARE\DDCL
-        \\echo - Start Menu shortcut added
-        \\echo - PATH updated (restart required for new sessions)
+        \\ - Registry keys created under HKLM\SOFTWARE\DDCL
+        \\ - Start Menu shortcut added
+        \\ - PATH updated (restart required for new sessions)
         \\
         ,
         .{},
@@ -493,11 +493,17 @@ pub fn main() !void {
     const stdout_writer = &stdout_file_writer.interface;
     MSI_INSTALL = try _isMsiInstall();
 
-    _ = _doTasks(arena) catch |err| {
+    const status = _doTasks(arena) catch |err| {
         try onFail(stdout_writer, err);
         try stdout_writer.flush();
         return;
     };
+
+    if (!status) {
+        try onFail(stdout_writer, error.null);
+        try stdout_writer.flush();
+        return;
+    }
 
     try onSuccess(stdout_writer);
     try stdout_writer.flush();

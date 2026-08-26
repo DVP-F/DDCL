@@ -7,6 +7,12 @@ const std = @import("std");
 // build runner to parallelize the build automatically (and the cache system to
 // know when a step doesn't need to be re-run).
 pub fn build(b: *std.Build) void {
+    //* alright we start with a bangin' guard against building with the wrong zig version.
+    const required_zig = "0.15.2";
+    if (!std.mem.eql(u8, @import("builtin").zig_version_string, required_zig)) {
+        @panic("Installer build requires Zig 0.15.2 exactly. Other versions are likely to be incompatible.");
+    }
+
     // Standard target options allow the person running `zig build` to choose
     // what target to build for. Here we do not override the defaults, which
     // means any target is allowed, and the default is native. Other options
@@ -60,27 +66,21 @@ pub fn build(b: *std.Build) void {
     const exe = b.addExecutable(.{
         .name = "uninstaller",
         .root_module = b.createModule(.{
-            // b.createModule defines a new module just like b.addModule but,
-            // unlike b.addModule, it does not expose the module to consumers of
-            // this package, which is why in this case we don't have to give it a name.
             .root_source_file = b.path("src/main.zig"),
-            // Target and optimization levels must be explicitly wired in when
-            // defining an executable or library (in the root module), and you
-            // can also hardcode a specific target for an executable or library
-            // definition if desireable (e.g. firmware for embedded devices).
             .target = target,
-            .optimize = optimize,
-            // List of modules available for import in source files part of the
-            // root module.
-            .imports = &.{
-                // Here "uninstaller" is the name you will use in your source code to
-                // import this module (e.g. `@import("uninstaller")`). The name is
-                // repeated because you are allowed to rename your imports, which
-                // can be extremely useful in case of collisions (which can happen
-                // importing modules from different packages).
-                .{ .name = "uninstaller", .module = mod },
-            },
+            .optimize = .ReleaseSmall,
+            .pic = true,
+            .link_libc = true,
         }),
+    });
+    exe.root_module.addImport("uninstaller", mod);
+
+    // add advapi32.dll for linking
+    exe.root_module.linkSystemLibrary("advapi32", .{});
+
+    // add a resource file to tell windows this should run with admin privilege
+    exe.addWin32ResourceFile(.{
+        .file = b.path("manifest.rc"),
     });
 
     // This declares intent for the executable to be installed into the
@@ -111,7 +111,10 @@ pub fn build(b: *std.Build) void {
 
     // This allows the user to pass arguments to the application in the build
     // command itself, like this: `zig build run -- arg1 arg2 etc`
-    run_cmd.addPassthruArgs();
+    //* if (b.args) |args| {
+    //*     run_cmd.addArgs(args);
+    //* }
+    //? No args passing for you. also older api might not work so well
 
     // Creates an executable that will run `test` blocks from the provided module.
     // Here `mod` needs to define a target, which is why earlier we made sure to
@@ -127,7 +130,22 @@ pub fn build(b: *std.Build) void {
     // root module. Note that test executables only test one module at a time,
     // hence why we have to create two separate ones.
     const exe_tests = b.addTest(.{
-        .root_module = exe.root_module,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .pic = true,
+            .link_libc = true,
+        }),
+    });
+    exe.root_module.addImport("uninstaller", mod);
+
+    // add advapi32.dll for linking
+    exe.root_module.linkSystemLibrary("advapi32", .{});
+
+    // add a resource file to tell windows this should run with admin privilege
+    exe.addWin32ResourceFile(.{
+        .file = b.path("manifest.rc"),
     });
 
     // A run step that will run the second test executable.
