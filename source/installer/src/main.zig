@@ -3,11 +3,37 @@ const std = @import("std");
 const c = @cImport({
     @cDefine("WIN32_LEAN_AND_MEAN", "1");
     @cInclude("windows.h");
-    @cInclude("winapi_helper.h");
 });
 
-// and reg_dword
+// and reg consts
 const REG_DWORD: c.DWORD = 4;
+const REG_SZ: c.DWORD = 1;
+const HKLM: usize = 0x80000002;
+const HKCU: usize = 0x80000001;
+
+// HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER are Win32 predefined pseudo-handles (0x80000002 and 0x80000001 respectively).
+// Zig 0.15.2's @cImport represents HKEY as an aligned C pointer ([*c]struct_HKEY__) and therefore cannot represent this value directly.
+// Keep the root handle as usize and use the ABI-compatible function signature below.
+
+const RegCreateKeyExW = @as(*const fn (
+    usize,
+    [*:0]const u16,
+    c.DWORD,
+    ?[*:0]u16,
+    c.DWORD,
+    c.REGSAM,
+    ?*c.SECURITY_ATTRIBUTES,
+    *c.HKEY,
+    ?*c.DWORD,
+) callconv(.winapi) c.LSTATUS, @ptrCast(&c.RegCreateKeyExW));
+
+const RegOpenKeyExW = @as(*const fn (
+    usize,
+    [*:0]const u16,
+    c.DWORD,
+    c.REGSAM,
+    *c.HKEY,
+) callconv(.winapi) c.LSTATUS, @ptrCast(&c.RegOpenKeyExW));
 
 const installer = @import("installer");
 var MSI_INSTALL: bool = undefined;
@@ -125,8 +151,8 @@ fn _doEditRegistry(installDir: []const u8) !void {
     defer std.heap.page_allocator.free(installDir16);
     {
         var key: c.HKEY = undefined;
-        const result = c.RegCreateKeyExW(
-            c.ddcl_hkey_local_machine(),
+        const result = RegCreateKeyExW(
+            HKLM,
             std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
             0,
             null,
@@ -143,7 +169,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
             0,
-            c.REG_SZ,
+            REG_SZ,
             @ptrCast(installDir16.ptr),
             @intCast(installDir16.len * @sizeOf(u16)),
         );
@@ -154,7 +180,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("InstallStatus"),
             0,
-            c.REG_DWORD,
+            REG_DWORD,
             @ptrCast(&value),
             @sizeOf(c.DWORD),
         );
@@ -163,8 +189,8 @@ fn _doEditRegistry(installDir: []const u8) !void {
     }
     {
         var key: c.HKEY = undefined;
-        const result = c.RegOpenKeyExW(
-            c.ddcl_hkey_local_machine(),
+        const result = RegOpenKeyExW(
+            HKLM,
             std.unicode.utf8ToUtf16LeStringLiteral(
                 "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
             ),
@@ -179,7 +205,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
             key,
             std.unicode.utf8ToUtf16LeStringLiteral("DDCL"),
             0,
-            c.REG_SZ,
+            REG_SZ,
             @ptrCast(installDir16.ptr),
             @intCast(installDir16.len * @sizeOf(u16)),
         );
@@ -202,8 +228,8 @@ fn editRegistry(installDir: []u8) bool {
 //         "Software\\MyApp",
 //     );
 
-//     if (windows.c.RegOpenKeyExW(
-//         c.ddcl_hkey_current_user(),
+//     if (RegOpenKeyExW(
+//         HKCU,
 //         path,
 //         0,
 //         windows.KEY_WRITE | windows.KEY_WOW64_64KEY,
@@ -223,7 +249,7 @@ fn editRegistry(installDir: []u8) bool {
 //     );
 
 //     _ = windows.c.RegDeleteKeyW(
-//         c.ddcl_hkey_current_user(),
+//         @ptrCast(@alignCast(HKCU)),
 //         path,
 //     );
 //     }
@@ -278,8 +304,8 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
     const value_name = std.unicode.utf8ToUtf16LeStringLiteral("Path");
     // Read HKLM\...\Environment\Path.
     var key: c.HKEY = undefined;
-    var status = c.RegOpenKeyExW(
-        c.ddcl_hkey_local_machine(),
+    var status = RegOpenKeyExW(
+        HKLM,
         subkey.ptr,
         0,
         c.KEY_READ | c.KEY_WOW64_64KEY,
@@ -328,8 +354,8 @@ fn ensurePath(arena: std.mem.Allocator, wanted: []const u8) !bool {
     );
     // Write the modified value back to the same registry key.
     const updated_utf16 = try std.unicode.utf8ToUtf16LeAlloc(arena, updated);
-    status = c.RegOpenKeyExW(
-        c.ddcl_hkey_local_machine(),
+    status = RegOpenKeyExW(
+        HKLM,
         subkey.ptr,
         0,
         c.KEY_SET_VALUE | c.KEY_WOW64_64KEY,
@@ -353,18 +379,15 @@ fn _doTasks(arena: std.mem.Allocator) !bool {
     const installDir: []u8 = try getInstallDir(arena);
     defer arena.free(installDir); // also shuts up about unused const
     const lnkStatus: bool = addShortcut(arena, installDir);
-    defer arena.free(lnkStatus);
     const regStatus: bool = editRegistry(installDir);
-    defer arena.free(regStatus);
     const pathStatus: bool = try ensurePath(arena, installDir);
-    defer arena.free(pathStatus);
     return (lnkStatus & regStatus & pathStatus & (installDir.len != 0));
 }
 
 fn _fallbackRegUpdate() !void {
     // fallback to a guarded command.
     var child = std.process.Child.init(
-        &[_][]const u8{ "reg", "add", "c.ddcl_hkey_local_machine()\\SOFTWARE\\DDCL\"", "/v", "InstallStatus", "/t", "DWORD", "/d", "1", "/f", ">nul", "2>&1" },
+        &[_][]const u8{ "reg", "add", "@ptrCast(@alignCast(HKLM))\\SOFTWARE\\DDCL\"", "/v", "InstallStatus", "/t", "DWORD", "/d", "1", "/f", ">nul", "2>&1" },
         std.heap.page_allocator,
     );
     _ = try child.spawnAndWait();
@@ -377,8 +400,8 @@ fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
         .{},
     );
     var key: c.HKEY = undefined;
-    const result = c.RegOpenKeyExW(
-        c.ddcl_hkey_local_machine(),
+    const result = RegOpenKeyExW(
+        HKLM,
         std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
         0,
         c.KEY_SET_VALUE | c.KEY_WOW64_64KEY,
@@ -408,7 +431,7 @@ fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
 fn onSuccess(writer: *std.Io.Writer) !void {
     try writer.print(\\
         \\Installation completed successfully!
-        \\echo - Registry keys created under HKLM\SOFTWARE\DDCL
+        \\echo - Registry keys created under @ptrCast(@alignCast(HKLM))\SOFTWARE\DDCL
         \\echo - Start Menu shortcut added
         \\echo - PATH updated (restart required for new sessions)
         \\
@@ -419,8 +442,8 @@ fn onSuccess(writer: *std.Io.Writer) !void {
 
 fn _isMsiInstall() !bool {
     var key: c.HKEY = undefined;
-    const result = c.RegOpenKeyExW(
-        c.ddcl_hkey_local_machine(),
+    const result = RegOpenKeyExW(
+        HKLM,
         std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
         0,
         c.KEY_QUERY_VALUE | c.KEY_WOW64_64KEY,

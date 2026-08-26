@@ -76,8 +76,6 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("installer", mod);
     // add advapi32.dll for linking
     exe.root_module.linkSystemLibrary("advapi32", .{});
-    // and local winapi helper
-    exe.root_module.addIncludePath(b.path("src"));
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
