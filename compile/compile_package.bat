@@ -17,22 +17,20 @@ set archive_failure=0
 
 REM Define the metadata
 REM Versions have to be four numbers
-set            version=0.1.1.0
-set      version_comma=0,1,1,0
+set            version=0.2.0.0
+set      version_comma=0,2,0,0
 set       company_name=CHANGEME
 set company_short_name=CHANGEME || REM Should match ^[a-zA-Z_]+$, used in legal id of the msi package.
 set        runner_name=DDCL
-set     installer_name=DDCL_Installer
 REM Output names
 set         "runner_bin_name=%runner_name%.exe"
-set      "installer_bin_name=%installer_name%.exe"
 set            "msi_bin_name=%runner_name%-Setup.msi"
 set       "archive_name_full=%runner_name%_full.zip"
 set     "archive_name_manual=%runner_name%_manual.zip"
 set "archive_name_standalone=%runner_name%_standalone.zip"
-REM Wix PDB, equivalent name to msi_bin_name - this file will be deleted!
+REM Wix PDB, equivalent name to msi_bin_name - will be deleted
 set             "wixpdb_name=%runner_name%-Setup.wixpdb"
-REM Dirs
+REM Dirs (dont change)
 set output_dir=..\dist
 set  start_dir="%cd%"
 REM Compiler paths
@@ -41,25 +39,24 @@ set    VC_VARS=C:\Program Files\Microsoft Visual Studio\...\vcvarsall.bat
 set    RC_PATH="C:\Program Files (x86)\Windows Kits\...\rc.exe"
 set  LINK_PATH="C:\Program Files\Microsoft Visual Studio\...\link.exe"
 set   WIX_PATH="C:\Program Files\WiX Toolset v7.0\bin\wix.exe"
-REM IDs for MSI package
+set   ZIG_PATH="C:\Program Files\Zig\zig.exe"
+REM GUIDs for MSI package
 REM __,,..-----'''¨¨¨¨ FORCEFIELD DO NOT TOUCH ¨¨¨¨'''-----..,,__
-set "MSIPKG_ID=DDCL_MSI_INSTALLER_ref_%company_short_name%" || REM Legal ID for the MSI
-set GUID_STABLE_UPGRADE=eec3969e-9ee5-4635-916d-01c318c849e7 || 
-	REM Program family UUID. If equal to an already installed app, overwrites it with this app.
-REM Individual file components
+set "MSIPKG_ID=DDCL_MSI_INSTALLER_ref_%company_short_name%"
+set GUID_STABLE_UPGRADE=eec3969e-9ee5-4635-916d-01c318c849e7
 set GUID_STABLE_RUNNER=5276fcd8-b925-4fb5-a886-cadbcd3f6cfe
 set GUID_STABLE_INSTALLER=217bf05d-2d4a-41fa-92a6-10e1198fefc9
+set GUID_STABLE_UNINSTALLER=bd8ba0a5-d30d-4076-a643-829287003487
 set GUID_STABLE_CONFIG=52b45464-0d16-40ea-ba59-eb1212372bd7
 set GUID_STABLE_NOTICE=07f52426-4afa-4a18-80e8-8c1a44a41d30
 set GUID_STABLE_LICENSE_GPL=35a50009-d180-4cf8-a3a1-32580f37309c
 set GUID_STABLE_LICENSE_MIT=4a5cb89b-2a11-477e-94a7-438ac326b5ca
+set GUID_STABLE_REGISTRY_KEYS=6672c5b2-c92b-49ef-a9a5-70eb787daba0
 REM ¨¨´'**-----,,,____ FORCEFIELD DO NOT TOUCH ____,,,-----**'`¨¨
-REM Product verion GUID. Change every new version
-set GUID_PRODUCT_CODE=6ff5a40b-a57b-4fb9-86ff-742b570bb6db
 
-REM You can install VS, Python, and WiX from here:
+REM You can install VS, Zig, and WiX from here:
 REM https://visualstudio.microsoft.com/downloads/	// At least 2022 edition, with C++ workload
-REM https://www.python.org/downloads/				// At least Python 3.10
+REM https://ziglang.org/download/                   // Only version 0.15.2 will work
 REM https://github.com/wixtoolset/wix/releases		// At least WiX CLI v7.0
 
 REM Ensure paths exist
@@ -68,13 +65,12 @@ if not exist %output_dir% (
 )
 (( cd /d %output_dir% || cd /d "%output_dir%" ) > nul && echo Output directory is set to "%output_dir%" ) || echo Failed to set output directory. Please check the path and permissions.
 
-REM This compiles the python scripts into executables using the Nuitka python package
-REM Ensure Nuitka and ZStd is installed
-python -m pip install nuitka > nul && echo Nuitka is installed! || echo Failed to ensure Nuitka is installed, aborting! && exit
-python -m pip install zstandard > nul && echo ZStandard is installed! || echo Failed to ensure ZStandard is installed!
-python -m pip install pyuac pywin32 > nul && echo PyUAC and PyWin32 are installed! || echo Failed to ensure PyUAC and PyWin32 are installed, aborting! && exit
-REM Compile installer.py
-python -m nuitka --mode=onefile --remove-output --include-windows-runtime-dlls=yes --windows-uac-admin --company-name="%company_name%" --product-name="%installer_name%" --file-version="%version%" --product-version="%version%" --output-dir="." --output-filename="%installer_bin_name%" --deployment ..\source\installer.py 
+REM compile zig binaries
+cd ../source/installer
+"%ZIG_PATH%" build
+cd ../uninstaller
+"%ZIG_PATH%" build
+cd "../%output_dir%"
 
 REM Generate the runner's resource file (runner.rc)
 (
@@ -97,8 +93,7 @@ REM Generate the runner's resource file (runner.rc)
 REM Set the environment vars for clang
 call "%VC_VARS%" x64
 
-
-REM Compile runner (DDCL.cpp)
+REM Compile runner (DiskDriveConnectionLogger.cpp)
 REM This assumes you have VS installed and it supports compiling C++17
 %CLANG_PATH% /EHsc /std:c++17 /c ..\source\app\DDCL.cpp /Fo:"runner.obj"
 if exist "runner.obj" (
@@ -121,6 +116,9 @@ if exist runner.rc (
 if exist runner.res (
 	del runner.res
 )
+if exist runner.exe (
+	REM del runner.exe
+)
 
 REM Package into an MSI installer
 REM This part is complex and requires the WiX Toolset or equivalent
@@ -135,46 +133,58 @@ REM Write the WiX source file
 	echo ^<?xml version="1.0" encoding="UTF-8"?^>
 	echo ^<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"^>
 	echo   ^<Package Id="%MSIPKG_ID%" Name="%runner_name%" Language="1033" Version="%version%" Manufacturer="%company_name%" UpgradeCode="%GUID_STABLE_UPGRADE%" InstallerVersion="500" Compressed="yes" Scope="perMachine"^>
-	echo     ^<MajorUpgrade Schedule="afterInstallInitialize" AllowSameVersionUpgrades="yes" AllowDowngrades="no" DowngradeErrorMessage="A newer version of %runner_name% is already installed." /^>
+	echo     ^<MajorUpgrade DowngradeErrorMessage="A newer version of %runner_name% is already installed." /^>
 	echo     ^<MediaTemplate EmbedCab="yes" /^>
-    echo     ^<StandardDirectory Id="ProgramFiles64Folder" ^>
+    echo     ^<StandardDirectory Id="ProgramFiles64Folder"^>
     echo       ^<Directory Id="INSTALLFOLDER" Name="%runner_name%" /^>
     echo     ^</StandardDirectory^>
     echo     ^<DirectoryRef Id="INSTALLFOLDER"^>
     echo       ^<Directory Id="LicensesDir" Name="LICENSES" /^>
     echo     ^</DirectoryRef^>
-    echo       ^<Component Id="RunnerComponent" Guid="%GUID_STABLE_RUNNER%" Directory="INSTALLFOLDER" ^>
-    echo         ^<File Id="Runner" Name="%runner_bin_name%" Source="%runner_bin_name%" KeyPath="yes" /^>
-    echo       ^</Component^>
-    echo       ^<Component Id="InstallerComponent" Guid="%GUID_STABLE_INSTALLER%" Directory="INSTALLFOLDER" ^>
-    echo         ^<File Id="Installer" Name="%installer_bin_name%" Source="%installer_bin_name%" KeyPath="yes" /^>
-    echo       ^</Component^>
-    echo       ^<Component Id="TomlComponent" Guid="%GUID_STABLE_CONFIG%" Directory="INSTALLFOLDER" ^>
-    echo         ^<File Id="Config" Name="conf.toml" Source="../source/conf.toml" KeyPath="yes" /^>
-    echo       ^</Component^>
-    echo       ^<Component Id="NoticeComponent" Guid="%GUID_STABLE_NOTICE%" Directory="INSTALLFOLDER" ^>
-    echo         ^<File Id="Notice" Name="NOTICE.txt" Source="../NOTICE.txt" KeyPath="yes" /^>
-    echo       ^</Component^>
-    echo        ^<ComponentGroup Id="LicenseComponents"^>
-    echo            ^<Component Id="GPLLicenseComponent" Guid="%GUID_STABLE_LICENSE_GPL%" Directory="LicensesDir" ^>
-    echo                ^<File Id="GPLLicense" Name="LICENSE.gpl3" Source="../LICENSES/LICENSE.gpl3" KeyPath="yes" /^>
-    echo            ^</Component^>
-    echo            ^<Component Id="MITLicenseComponent" Guid="%GUID_STABLE_LICENSE_MIT%" Directory="LicensesDir"^>
-    echo                ^<File Id="MITLicense" Name="LICENSE.mit" Source="../LICENSES/LICENSE.mit" KeyPath="yes" /^>
-    echo            ^</Component^>
-    echo        ^</ComponentGroup^>
+    echo      ^<Component Id="RunnerComponent" Guid="%GUID_STABLE_RUNNER%"^>
+    echo        ^<File Id="Runner" Name="%runner_bin_name%" Source="%runner_bin_name%" KeyPath="yes" /^>
+    echo      ^</Component^>
+    echo      ^<Component Id="InstallerComponent" Guid="%GUID_STABLE_INSTALLER%"^>
+    echo        ^<File Id="Installer" Name="installer.exe" Source="../source/installer/zig-out/bin/installer.exe" KeyPath="yes" /^>
+    echo      ^</Component^>
+    echo      ^<Component Id="UninstallerComponent" Guid="%GUID_STABLE_UNINSTALLER%"^>
+    echo        ^<File Id="Uninstaller" Name="uninstaller.exe" Source="../source/uninstaller/zig-out/bin/uninstaller.exe" KeyPath="yes" /^>
+    echo      ^</Component^>
+    echo      ^<Component Id="TomlComponent" Guid="%GUID_STABLE_CONFIG%"^>
+    echo        ^<File Id="Config" Name="conf.toml" Source="conf.toml" KeyPath="yes" /^>
+    echo      ^</Component^>
+    echo      ^<Component Id="NoticeComponent" Guid="%GUID_STABLE_NOTICE%"^>
+    echo        ^<File Id="Notice" Name="NOTICE.txt" Source="../NOTICE.txt" KeyPath="yes" /^>
+    echo      ^</Component^>
+    echo      ^<ComponentGroup Id="LicenseComponents"^>
+    echo          ^<Component Id="GPLLicenseComponent" Guid="%GUID_STABLE_LICENSE_GPL%" Directory="LicensesDir"^>
+    echo              ^<File Id="GPLLicense" Name="LICENSE.gpl3" Source="../LICENSES/LICENSE.gpl3" KeyPath="yes" /^>
+    echo          ^</Component^>
+    echo          ^<Component Id="MITLicenseComponent" Guid="%GUID_STABLE_LICENSE_MIT%" Directory="LicensesDir"^>
+    echo              ^<File Id="MITLicense" Name="LICENSE.mit" Source="../LICENSES/LICENSE.mit" KeyPath="yes" /^>
+    echo          ^</Component^>
+    echo      ^</ComponentGroup^>
 	echo     ^<Feature Id="MainFeature" Title="MainFeature" Level="1"^>
 	echo       ^<ComponentRef Id="RunnerComponent" /^>
 	echo       ^<ComponentRef Id="InstallerComponent" /^>
+	echo       ^<ComponentRef Id="UninstallerComponent" /^>
 	echo       ^<ComponentRef Id="TomlComponent" /^>
 	echo       ^<ComponentRef Id="NoticeComponent" /^>
 	echo       ^<ComponentGroupRef Id="LicenseComponents"/^>
 	echo     ^</Feature^>
+	echo     ^<Fragment^>
+	echo       ^<Component Id="MyRegistryComponent" Guid="%GUID_STABLE_REGISTRY_KEYS%"^>
+	echo         ^<RegistryKey Root="HKLM" Key="Software\DDCL" KeyPath="yes" ^>
+	echo           ^<RegistryValue Name="InstallType" Type="integer" Value="1" /^>
+	echo           ^<RegistryValue Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" /^>
+	echo         ^</RegistryKey^>
+	echo       ^</Component^>
+	echo     ^</Fragment^>
 	echo     ^<CustomAction Id="LaunchInstaller" FileRef="Installer" ExeCommand="" Execute="deferred" Return="asyncNoWait" Impersonate="no" /^>
-	REM echo     ^<CustomAction Id="LaunchUninstaller" FileRef="Uninstaller" ExeCommand="--from-msi" Execute="deferred" Return="asyncNoWait" Impersonate="no" /^>
+	echo     ^<CustomAction Id="LaunchUninstaller" FileRef="Uninstaller" ExeCommand="" Execute="deferred" Return="ignore" Impersonate="no" /^>
 	echo     ^<InstallExecuteSequence^>
 	echo       ^<Custom Action="LaunchInstaller" Before="InstallFinalize"/^>
-	REM echo       ^<Custom Action="LaunchUninstaller" Before="RemoveFiles" Condition="REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" /^>
+	echo       ^<Custom Action="LaunchUninstaller" Before="RemoveFiles" Condition="REMOVE = &quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" /^>
 	echo     ^</InstallExecuteSequence^>
 	echo   ^</Package^>
 	echo ^</Wix^>
@@ -204,7 +214,7 @@ powershell -Command Compress-Archive -Path conf.toml, "%runner_bin_name%", ..\so
 REM Standalone (runner, conf.toml)
 powershell -Command Compress-Archive -Path conf.toml, "%runner_bin_name%", LICENSES, ..\NOTICE.txt -DestinationPath "%archive_name_standalone%" -Force -CompressionLevel Optimal 1>nul && echo Success! || echo Failed compression! && set archive_failure=1
 REM remove temp license dir
-rmdir /s /q LICENSES	
+rmdir /s /q LICENSES
 
 REM Final output message
 echo.

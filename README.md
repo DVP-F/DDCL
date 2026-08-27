@@ -66,9 +66,8 @@ Assuming default names.
 - DDCL.exe
   - The actual logging binary, the interface for monitoring.
   - Compiled from `DDCL.cpp`
-- DDCL_Installer.exe
-  - This registers the runner binary `DDCL.exe`, registry keys, and %PATH% for ease of use.
-  - Compiled from `installer.py`
+- installer.exe
+  - This registers the runner binary `DDCL.exe`, registry keys, and %PATH% for ease of 
 - DDCL-Setup.msi
   - An installer package. This copies over the necessary files (including a customized `conf.toml`)  
     and then executes `DDCL_Installer.exe`.
@@ -81,10 +80,6 @@ Assuming default names.
     - The main source, the actuall UI and logger.
   - [toml.hpp](./source/toml.hpp)
     - The C++17 TOML parsing library used by DDCL.
-  - [installer.py](./source/installer.py)
-    - The primary registration script - registers the runner binary `DDCL.exe`, registry keys, and %PATH%
-  - [installer.bat](./source/installer.bat)
-    - The secondary registration script - registers the runner binary `DDCL.exe`, registry keys, and %PATH%
 - [./compile/](./compile/)
   - [compile_package.bat](./compile/compile_package.bat)
     - This is the primary compilation script, which handles python scripts and the runner,  
@@ -118,8 +113,6 @@ Assuming default names.
     - Technical documentation of [DDCL.cpp](./source/DDCL.cpp) 
   - [compile_package.bat.md](./docs/compile_package.bat.md)  
     - Technical documentation of [compile_package.bat](./compile/compile_package.bat)   
-  - [installer.py.md](./docs/installer.py.md)  
-    - Technical documentation of [installer.py](./source/installer.py) 
   - [installer.bat.md](./docs/installer.bat.md)  
     - Technical documentation of [installer.bat](./source/installer.bat)   
 
@@ -147,7 +140,6 @@ If compiling from source, prior to compilation, remember to:
 
 - modify the `source/conf.toml` TOML configuration file as it's copied wholesale into the MSI  
 - edit the environment variables at the top of `compile/compile_package.bat` to match your use.
-- edit the values used in `source/installer.py` (`_add_lnk()`, `_find_installation_path()`) to match your use
 
 #### Compilation  
 
@@ -158,24 +150,13 @@ Minimum version is lowest version with known compatible syntax.
 - MSVC Linker (minimum recommended: MSVC 14.44.35207)
 - MS Resource Compiler (minimum recommended: Windows Kits for 10.0.26100.0)
 - WiX CLI Tools (minimum version: 4.0)
-- Python (minimum version: 3.10.x)
-- Python packages:
-  - `pyuac` (administrator elevation)
-  - `pywin32` or `pypiwin32` (for pyuac and win32com)
-  - `nuitka` (binary compilation)
-  - `zstandard` (compression) 
-
-About PyWin32 and PyPiWin32 :  
-
-- [mail.python.org, 27.10.2016](https://mail.python.org/pipermail/python-win32/2016-October/013786.html)  
-- [PyPi, PyWin32](https://pypi.org/project/pywin32/)  
-- [GitHub, brandond/requests-negotiate-sspi Issue 13](https://github.com/brandond/requests-negotiate-sspi/issues/13)  
+- Zig v0.15.2
 
 #### Recommended environment  
 
 - MS Visual Studio 2022 CE with C++ workload
 - WiX CLI Tools 7.0
-- Python 3.12+ with `pyuac`, `pywin32`, `nuitka`, `zstandard`
+- Zig 0.15.2
 
 #### Requirements for installation  
 

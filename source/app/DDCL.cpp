@@ -88,7 +88,7 @@ static bool show_config = false;
 static bool show_help = false;
 static bool set_maxRuns = false;
 
-#define VERSION "0.1.1"
+#define VERSION "0.2.0"
 
 // toml config default
 constexpr const char* DEFAULT_CONF = R"(

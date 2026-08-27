@@ -1,3 +1,9 @@
+// Copyright (c) DVP-F/Carnx00 2026 <carnx@duck.com>
+// License : GNU GPL 3.0 (https://www.gnu.org/licenses/gpl-3.0.html) supplied with the package under `LICENSES`
+// Source code hosts:
+// - GitHub: https://github.com/DVP-F/DDCL 
+// See `NOTICE.txt` for further Licensing information
+
 const std = @import("std");
 const c = @cImport({
     @cDefine("WIN32_LEAN_AND_MEAN", "1");
