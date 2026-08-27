@@ -97,12 +97,12 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
 
 fn _doGetInstallDir_CWD(arena: std.mem.Allocator) ![]u8 {
     // current directory is plausible
-    var installDir: []u8 = try std.process.getEnvVarOwned(arena, "cd");
+    var installDir: []u8 = try std.process.getCwdAlloc(arena);
     defer arena.free(installDir);
     // see if executable is here
     if (blk: {
         //? this check is only performed twice so im not bothering to make it its own fn
-        std.fs.cwd().access(
+        _ = std.fs.cwd().access(
             try std.fs.path.join(arena, &.{
                 installDir,
                 "DDCL.exe",
@@ -145,10 +145,14 @@ fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
     var installDir: []u8 = undefined;
     if (MSI_INSTALL) {
         // if msi installed, check the registry key for location and assume it to be correct.
-        installDir = try _doGetInstallDir_MSI(arena);
+        installDir = _doGetInstallDir_MSI(arena) catch {
+            @panic("Failed to get install directory");
+        };
     } {
         // else use cwd
-        installDir = try _doGetInstallDir_CWD(arena);
+        installDir = _doGetInstallDir_CWD(arena) catch {
+            @panic("Failed to get install directory");
+        };
     }
     return installDir;
 }
@@ -175,7 +179,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
                 null,
             );
             if (result != 0)
-                return error.CreateKeyFailed;
+                return error.RegCreateKeyFailed;
         } else {
             const result = RegOpenKeyExW(
                 HKLM,
@@ -185,7 +189,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
                 &key,
             );
             if (result != 0)
-                return error.OpenKeyFailed;
+                return error.RegOpenKeyFailed;
         }
         defer _ = c.RegCloseKey(key);
         var set_result = c.RegSetValueExW(
@@ -222,7 +226,7 @@ fn _doEditRegistry(installDir: []const u8) !void {
             &key,
         );
         if (result != 0)
-            return error.OpenKeyFailed;
+            return error.RegOpenKeyFailed;
         defer _ = c.RegCloseKey(key);
         const set_result = c.RegSetValueExW(
             key,
@@ -253,6 +257,9 @@ fn _doAddShortcut(arena: std.mem.Allocator, installDir: []u8) !void {
     const scriptText: []u8 = try std.fmt.allocPrint(
         arena,
         \\Set WshShell = CreateObject("WScript.Shell")
+        \\Set FSO = CreateObject("Scripting.FileSystemObject")
+        \\If Not FSO.FolderExists("C:\ProgramData\Microsoft\Windows\Start Menu\Programs\DDCL") Then _
+        \\    FSO.CreateFolder "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\DDCL"
         \\Set oLink = WshShell.CreateShortcut("C:\ProgramData\Microsoft\Windows\Start Menu\Programs\DDCL\DDCL.lnk")
         \\oLink.TargetPath = "{s}\DDCL.exe"
         \\oLink.WorkingDirectory = "{s}"
@@ -262,7 +269,7 @@ fn _doAddShortcut(arena: std.mem.Allocator, installDir: []u8) !void {
     defer arena.free(scriptText);
     // write to a temp file
     const spath = try std.fs.path.join(arena, &.{
-        try std.process.getEnvVarOwned(arena, "TEMP"),
+        "C:\\Windows\\Temp", // bc TEMP can be fucking anywhere
         "t_script.vbs" });
     defer arena.free(spath);
     try std.fs.cwd().writeFile(.{
@@ -377,7 +384,7 @@ fn _doTasks(arena: std.mem.Allocator) !bool {
 fn _fallbackRegUpdate() !void {
     // fallback to a guarded command.
     var child = std.process.Child.init(
-        &[_][]const u8{ "reg", "add", "@ptrCast(@alignCast(HKLM))\\SOFTWARE\\DDCL\"", "/v", "InstallStatus", "/t", "DWORD", "/d", "1", "/f", ">nul", "2>&1" },
+        &[_][]const u8{ "reg", "add", "HKLM\\SOFTWARE\\DDCL\"", "/v", "InstallStatus", "/t", "DWORD", "/d", "1", "/f", ">nul", "2>&1" },
         std.heap.page_allocator,
     );
     _ = try child.spawnAndWait();
@@ -386,9 +393,10 @@ fn _fallbackRegUpdate() !void {
 fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
     std.debug.print("Error: {}\n", .{err});
     try writer.print(
-        "Installation failed - registry marked as failed (InstallStatus=1).",
+        "Installation failed\n",
         .{},
     );
+    try writer.flush();
     var key: c.HKEY = undefined;
     const result = RegOpenKeyExW(
         HKLM,
@@ -398,7 +406,9 @@ fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
         &key,
     );
     if (result != 0) {
-        return error.OpenKeyFailed;
+        _ = _fallbackRegUpdate() catch {
+            return error.RegUpdateFailed;
+        };
     } {
         defer _ = c.RegCloseKey(key);
         const value: c.DWORD = 1;
@@ -411,7 +421,7 @@ fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
             @sizeOf(c.DWORD),
         );
         if (set_result != 0) {
-            return error.SetValueFailed;
+            return error.RegSetValueFailed;
         } {
             try _fallbackRegUpdate();
         }
@@ -440,6 +450,8 @@ fn _isMsiInstall() !bool {
         &key,
     );
     defer _ = c.RegCloseKey(key);
+    if (result == 2) // key does not exist
+        return false;
     if (result != 0)
         return error.OpenKeyFailed;
     var value: u32 = undefined;

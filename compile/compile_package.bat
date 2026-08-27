@@ -67,9 +67,9 @@ if not exist %output_dir% (
 
 REM compile zig binaries
 cd ../source/installer
-"%ZIG_PATH%" build
+%ZIG_PATH% build
 cd ../uninstaller
-"%ZIG_PATH%" build
+%ZIG_PATH% build
 cd "../%output_dir%"
 
 REM Generate the runner's resource file (runner.rc)
@@ -132,7 +132,15 @@ REM Write the WiX source file
 (
 	echo ^<?xml version="1.0" encoding="UTF-8"?^>
 	echo ^<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"^>
-	echo   ^<Package Id="%MSIPKG_ID%" Name="%runner_name%" Language="1033" Version="%version%" Manufacturer="%company_name%" UpgradeCode="%GUID_STABLE_UPGRADE%" InstallerVersion="500" Compressed="yes" Scope="perMachine"^>
+	echo   ^<Fragment^>
+	echo     ^<Component Id="RegistryComponent" Guid="%GUID_STABLE_REGISTRY_KEYS%" Bitness="always64" ^>
+	echo       ^<RegistryKey Root="HKLM" Key="Software\DDCL" ^>
+	echo         ^<RegistryValue Name="InstallType" Type="integer" Value="1" KeyPath="yes" /^>
+	echo         ^<RegistryValue Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" /^>
+	echo       ^</RegistryKey^>
+	echo     ^</Component^>
+	echo   ^</Fragment^>
+	echo   ^<Package Id="%MSIPKG_ID%" Name="%runner_name%" Language="1033" Version="%version%" Manufacturer="%company_name%" UpgradeCode="%GUID_STABLE_UPGRADE%" InstallerVersion="500" Compressed="yes" Scope="perMachine" ^>
 	echo     ^<MajorUpgrade DowngradeErrorMessage="A newer version of %runner_name% is already installed." /^>
 	echo     ^<MediaTemplate EmbedCab="yes" /^>
     echo     ^<StandardDirectory Id="ProgramFiles64Folder"^>
@@ -141,45 +149,38 @@ REM Write the WiX source file
     echo     ^<DirectoryRef Id="INSTALLFOLDER"^>
     echo       ^<Directory Id="LicensesDir" Name="LICENSES" /^>
     echo     ^</DirectoryRef^>
-    echo      ^<Component Id="RunnerComponent" Guid="%GUID_STABLE_RUNNER%"^>
-    echo        ^<File Id="Runner" Name="%runner_bin_name%" Source="%runner_bin_name%" KeyPath="yes" /^>
-    echo      ^</Component^>
-    echo      ^<Component Id="InstallerComponent" Guid="%GUID_STABLE_INSTALLER%"^>
-    echo        ^<File Id="Installer" Name="installer.exe" Source="../source/installer/zig-out/bin/installer.exe" KeyPath="yes" /^>
-    echo      ^</Component^>
-    echo      ^<Component Id="UninstallerComponent" Guid="%GUID_STABLE_UNINSTALLER%"^>
-    echo        ^<File Id="Uninstaller" Name="uninstaller.exe" Source="../source/uninstaller/zig-out/bin/uninstaller.exe" KeyPath="yes" /^>
-    echo      ^</Component^>
-    echo      ^<Component Id="TomlComponent" Guid="%GUID_STABLE_CONFIG%"^>
-    echo        ^<File Id="Config" Name="conf.toml" Source="conf.toml" KeyPath="yes" /^>
-    echo      ^</Component^>
-    echo      ^<Component Id="NoticeComponent" Guid="%GUID_STABLE_NOTICE%"^>
-    echo        ^<File Id="Notice" Name="NOTICE.txt" Source="../NOTICE.txt" KeyPath="yes" /^>
-    echo      ^</Component^>
-    echo      ^<ComponentGroup Id="LicenseComponents"^>
-    echo          ^<Component Id="GPLLicenseComponent" Guid="%GUID_STABLE_LICENSE_GPL%" Directory="LicensesDir"^>
-    echo              ^<File Id="GPLLicense" Name="LICENSE.gpl3" Source="../LICENSES/LICENSE.gpl3" KeyPath="yes" /^>
-    echo          ^</Component^>
-    echo          ^<Component Id="MITLicenseComponent" Guid="%GUID_STABLE_LICENSE_MIT%" Directory="LicensesDir"^>
-    echo              ^<File Id="MITLicense" Name="LICENSE.mit" Source="../LICENSES/LICENSE.mit" KeyPath="yes" /^>
-    echo          ^</Component^>
-    echo      ^</ComponentGroup^>
-	echo     ^<Feature Id="MainFeature" Title="MainFeature" Level="1"^>
+    echo     ^<Component Id="RunnerComponent" Guid="%GUID_STABLE_RUNNER%" Bitness="always64" ^>
+    echo       ^<File Id="Runner" Name="%runner_bin_name%" Source="%runner_bin_name%" KeyPath="yes" /^>
+    echo     ^</Component^>
+    echo     ^<Component Id="InstallerComponent" Guid="%GUID_STABLE_INSTALLER%" Bitness="always64" ^>
+    echo       ^<File Id="Installer" Name="installer.exe" Source="../source/installer/zig-out/bin/installer.exe" KeyPath="yes" /^>
+    echo     ^</Component^>
+    echo     ^<Component Id="UninstallerComponent" Guid="%GUID_STABLE_UNINSTALLER%" Bitness="always64" ^>
+    echo       ^<File Id="Uninstaller" Name="uninstaller.exe" Source="../source/uninstaller/zig-out/bin/uninstaller.exe" KeyPath="yes" /^>
+    echo     ^</Component^>
+    echo     ^<Component Id="TomlComponent" Guid="%GUID_STABLE_CONFIG%"^>
+    echo       ^<File Id="Config" Name="conf.toml" Source="conf.toml" KeyPath="yes" /^>
+    echo     ^</Component^>
+    echo     ^<Component Id="NoticeComponent" Guid="%GUID_STABLE_NOTICE%"^>
+    echo       ^<File Id="Notice" Name="NOTICE.txt" Source="../NOTICE.txt" KeyPath="yes" /^>
+    echo     ^</Component^>
+    echo     ^<ComponentGroup Id="LicenseComponents"^>
+    echo         ^<Component Id="GPLLicenseComponent" Guid="%GUID_STABLE_LICENSE_GPL%" Directory="LicensesDir"^>
+    echo             ^<File Id="GPLLicense" Name="LICENSE.gpl3" Source="../LICENSES/LICENSE.gpl3" KeyPath="yes" /^>
+    echo         ^</Component^>
+    echo         ^<Component Id="MITLicenseComponent" Guid="%GUID_STABLE_LICENSE_MIT%" Directory="LicensesDir"^>
+    echo             ^<File Id="MITLicense" Name="LICENSE.mit" Source="../LICENSES/LICENSE.mit" KeyPath="yes" /^>
+    echo         ^</Component^>
+    echo     ^</ComponentGroup^>
+	echo     ^<Feature Id="MainFeature" Title="DDCL" Level="1"^>
 	echo       ^<ComponentRef Id="RunnerComponent" /^>
 	echo       ^<ComponentRef Id="InstallerComponent" /^>
 	echo       ^<ComponentRef Id="UninstallerComponent" /^>
 	echo       ^<ComponentRef Id="TomlComponent" /^>
 	echo       ^<ComponentRef Id="NoticeComponent" /^>
+    echo       ^<ComponentRef Id="RegistryComponent" /^>
 	echo       ^<ComponentGroupRef Id="LicenseComponents"/^>
 	echo     ^</Feature^>
-	echo     ^<Fragment^>
-	echo       ^<Component Id="MyRegistryComponent" Guid="%GUID_STABLE_REGISTRY_KEYS%"^>
-	echo         ^<RegistryKey Root="HKLM" Key="Software\DDCL" KeyPath="yes" ^>
-	echo           ^<RegistryValue Name="InstallType" Type="integer" Value="1" /^>
-	echo           ^<RegistryValue Name="InstallPath" Type="string" Value="[INSTALLFOLDER]" /^>
-	echo         ^</RegistryKey^>
-	echo       ^</Component^>
-	echo     ^</Fragment^>
 	echo     ^<CustomAction Id="LaunchInstaller" FileRef="Installer" ExeCommand="" Execute="deferred" Return="asyncNoWait" Impersonate="no" /^>
 	echo     ^<CustomAction Id="LaunchUninstaller" FileRef="Uninstaller" ExeCommand="" Execute="deferred" Return="ignore" Impersonate="no" /^>
 	echo     ^<InstallExecuteSequence^>
@@ -191,7 +192,7 @@ REM Write the WiX source file
 ) > installer.wxs
 
 echo Compiling MSI...
-%WIX_PATH% build installer.wxs -o %msi_bin_name% -ext WixToolset.Util.wixext  && echo Success! || echo Failed to compile MSI package!
+%WIX_PATH% build -arch x64 installer.wxs -o %msi_bin_name% -ext WixToolset.Util.wixext  && echo Success! || echo Failed to compile MSI package!
 
 REM Clean up intermediate files
 if exist installer.wxs (

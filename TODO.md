@@ -33,9 +33,7 @@
 | Pre-production use       | Commandline use                             |       |
 | Prep for use in-prod     | Update documentation                        |       |
 | Prep for use in-prod     | Technical docs                              |       |
-| Redo (un)install         | Update packaging scripts                    |       |
-
-ADD reg write from msi 'InstallType' and use to direct (un)install instead of args
+| Redo (un)install         | Update packaging scripts                    |  0.5  |
 
 ```plaintext
        ,
