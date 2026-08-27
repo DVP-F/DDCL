@@ -8,12 +8,13 @@
 #define NOMINMAX
 
 #include <cstddef>
-// #include <array>
 #include <atomic>
 #include <algorithm>
 #include <chrono>
 #include <cctype>
 #include <memory>
+#include <mutex>
+#include <limits>
 #include <cstring>
 #include <cstdlib>
 #include <filesystem>
@@ -384,6 +385,24 @@ static std::string get_timestamp() {
 }
 #pragma warning(default:4996)
 
+static void set_internet_timeout(HINTERNET handle, DWORD timeout_ms) {
+    InternetSetOptionW(
+        handle,
+        INTERNET_OPTION_CONNECT_TIMEOUT,
+        &timeout_ms,
+        sizeof(timeout_ms));
+    InternetSetOptionW(
+        handle,
+        INTERNET_OPTION_SEND_TIMEOUT,
+        &timeout_ms,
+        sizeof(timeout_ms));
+    InternetSetOptionW(
+        handle,
+        INTERNET_OPTION_RECEIVE_TIMEOUT,
+        &timeout_ms,
+        sizeof(timeout_ms));
+}
+
 static bool is_drive_ready(char drive) {
 	char root[4] = { drive, ':', '\\', 0 };
 	UINT driveType = GetDriveTypeA(root);
@@ -429,43 +448,52 @@ static bool udp_dns_test(const char* dns_ip) {
 }
 
 // Lightweight HTTP HEAD probe using WinINet (fallback when InternetCheckConnection is unreliable)
-static bool http_head_probe(const char* url_cstr, DWORD timeout_ms = 250) {
-	if (!url_cstr || !*url_cstr) return false;
-	std::wstring wurl = to_wide(url_cstr);
-	// Crack URL into components
-	URL_COMPONENTSW uc{};
-	uc.dwStructSize = sizeof(uc);
-	uc.dwHostNameLength = uc.dwUrlPathLength = 1; // request lengths
-	if (!InternetCrackUrlW(wurl.c_str(), 0, 0, &uc)) return false;
-	// Copy host and path from cracked URL (points into wurl)
-	std::wstring host(uc.lpszHostName ? uc.lpszHostName : L"", uc.dwHostNameLength);
-	std::wstring path(uc.lpszUrlPath ? uc.lpszUrlPath : L"/", uc.dwUrlPathLength ? uc.dwUrlPathLength : 1);
-	unsigned short port = uc.nPort ? static_cast<unsigned short>(uc.nPort) : (uc.nScheme == INTERNET_SCHEME_HTTPS ? 443 : 80);
-	bool secure = (uc.nScheme == INTERNET_SCHEME_HTTPS);
-	HINTERNET hInternet = InternetOpenW(L"DDCLProbe", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
-	if (!hInternet) return false;
-	HINTERNET hConnect = InternetConnectW(hInternet, host.c_str(), port, NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
-	if (!hConnect) { InternetCloseHandle(hInternet); return false; }
-	DWORD flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_RELOAD;
-	if (secure) flags |= INTERNET_FLAG_SECURE;
-	HINTERNET hRequest = HttpOpenRequestW(hConnect, L"HEAD", path.c_str(), NULL, NULL, NULL, flags, 0);
-	if (!hRequest) { InternetCloseHandle(hConnect); InternetCloseHandle(hInternet); return false; }
-	// Set timeouts
-	DWORD to = timeout_ms;
-	InternetSetOptionW(hRequest, INTERNET_OPTION_CONNECT_TIMEOUT, &to, sizeof(to));
-	InternetSetOptionW(hRequest, INTERNET_OPTION_SEND_TIMEOUT, &to, sizeof(to));
-	InternetSetOptionW(hRequest, INTERNET_OPTION_RECEIVE_TIMEOUT, &to, sizeof(to));
-	BOOL sent = HttpSendRequestW(hRequest, NULL, 0, NULL, 0);
-	bool ok = false;
-	if (sent) {
-		DWORD status = 0;
-		DWORD sz = sizeof(status);
-		if (HttpQueryInfoW(hRequest, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &status, &sz, NULL)) {
-			ok = (status >= 200 && status < 400);
-		}
-	}
-	InternetCloseHandle(hRequest); InternetCloseHandle(hConnect); InternetCloseHandle(hInternet);
-	return ok;
+static bool http_head_probe(const char* url_cstr, DWORD timeout_ms = 1000) {
+    if (!url_cstr || !*url_cstr)
+        return false;
+    std::wstring wurl = to_wide(url_cstr);
+    URL_COMPONENTSW uc{};
+    uc.dwStructSize = sizeof(uc);
+    uc.dwHostNameLength = static_cast<DWORD>(-1);
+    uc.dwUrlPathLength = static_cast<DWORD>(-1);
+    if (!InternetCrackUrlW(wurl.c_str(), 0, 0, &uc))
+        return false;
+    std::wstring host(uc.lpszHostName, uc.dwHostNameLength);
+    std::wstring path = uc.lpszUrlPath && uc.dwUrlPathLength ? std::wstring(uc.lpszUrlPath, uc.dwUrlPathLength) : L"/";
+    const INTERNET_PORT port = uc.nPort ? uc.nPort : (uc.nScheme == INTERNET_SCHEME_HTTPS ? 443 : 80);
+    DWORD flags = INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_PRAGMA_NOCACHE | INTERNET_FLAG_RELOAD;
+    if (uc.nScheme == INTERNET_SCHEME_HTTPS)
+        flags |= INTERNET_FLAG_SECURE;
+    HINTERNET internet = InternetOpenW(L"DDCLProbe", INTERNET_OPEN_TYPE_PRECONFIG, nullptr, nullptr, 0);
+    if (!internet)
+        return false;
+    set_internet_timeout(internet, timeout_ms);
+    HINTERNET connection = InternetConnectW(internet, host.c_str(), port, nullptr, nullptr, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!connection) {
+        InternetCloseHandle(internet);
+        return false;
+    }
+    set_internet_timeout(connection, timeout_ms);
+    HINTERNET request = HttpOpenRequestW(connection, L"HEAD", path.c_str(), nullptr, nullptr, nullptr, flags, 0);
+    if (!request) {
+        InternetCloseHandle(connection);
+        InternetCloseHandle(internet);
+        return false;
+    }
+    set_internet_timeout(request, timeout_ms);
+    BOOL sent = HttpSendRequestW(request, nullptr, 0, nullptr, 0);
+    bool success = false;
+    if (sent) {
+        DWORD status = 0;
+        DWORD status_size = sizeof(status);
+        if (HttpQueryInfoW(request, HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &status, &status_size, nullptr)) {
+            success = status >= 200 && status < 400;
+        }
+    }
+    InternetCloseHandle(request);
+    InternetCloseHandle(connection);
+    InternetCloseHandle(internet);
+    return success;
 }
 
 static bool has_internet(const char* check_ip = "www.msftconnecttest.com", const char* dns_resolver = "9.9.9.9") {
@@ -485,62 +513,66 @@ static bool has_internet(const char* check_ip = "www.msftconnecttest.com", const
 	return false;
 }
 
+static bool resolve_with_system_dns(const std::string& hostname, const std::string& dns_server_ip, std::chrono::milliseconds timeout) {
+    if (hostname.empty() || dns_server_ip.empty())
+        return false;
+    IP4_ARRAY dns_servers{};
+    dns_servers.AddrCount = 1;
+    dns_servers.AddrArray[0] = inet_addr(dns_server_ip.c_str());
+    DNS_RECORD* records = nullptr;
+    // DnsQueryConfig has no reliable per-call timeout. Run it on a detached
+    // worker and return promptly. The DNS API owns its own buffers.
+    std::atomic<bool> finished{ false };
+    std::atomic<bool> success{ false };
+    std::thread([&]() {
+        DNS_STATUS status = DnsQuery_A(
+            hostname.c_str(),
+            DNS_TYPE_A,
+            DNS_QUERY_STANDARD | DNS_QUERY_NO_WIRE_QUERY,
+            &dns_servers,
+            &records,
+            nullptr);
+        success.store(
+            status == ERROR_SUCCESS && records != nullptr,
+            std::memory_order_release);
+        if (records)
+            DnsRecordListFree(records, DnsFreeRecordList);
+        finished.store(true, std::memory_order_release);
+    }).detach();
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (!finished.load(std::memory_order_acquire) && std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return finished.load(std::memory_order_acquire) && success.load(std::memory_order_acquire);
+}
+
 static std::vector<bool> resolve_hostname(const std::string& hostname, const std::string& dns_server_ip) {
-	// in total ~500ms timeout if both queries time out or are deferred
-	std::vector<bool> results(2, false);
-	// FIRST: Custom DNS server
-	{
-		IP4_ARRAY dns_servers = {};
-		dns_servers.AddrCount = 1;
-		dns_servers.AddrArray[0] = inet_addr(dns_server_ip.c_str());
-		auto future = std::async(std::launch::async, [&]() -> std::pair<bool, DNS_RECORD*> {
-			DNS_RECORD* results_custom_local = nullptr;
-			DNS_STATUS status_local = DnsQuery_A(
-				hostname.c_str(),
-				DNS_TYPE_A,
-				DNS_QUERY_STANDARD,
-				&dns_servers,
-				&results_custom_local,
-				nullptr);
-			bool success = (status_local == ERROR_SUCCESS && results_custom_local != nullptr);
-			return { success, results_custom_local };
-			});
-		auto future_status = future.wait_for(std::chrono::milliseconds(250));
-		if (future_status == std::future_status::ready) {
-			auto [success, results_custom] = future.get();
-			results[0] = success;
-			if (results_custom) {
-				DnsRecordListFree(results_custom, DnsFreeRecordList);
-			}
-		}
-		else {
-			results[0] = false;  // Timeout or deferred
-		}
-	}
-	// SECOND: System DNS (local)
-	{
-		addrinfo hints = {};
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
-		auto future = std::async(std::launch::async, [&]() -> std::pair<bool, addrinfo*> {
-			addrinfo* result_local = nullptr;
-			int gai_status_local = getaddrinfo(hostname.c_str(), nullptr, &hints, &result_local);
-			bool success = (gai_status_local == 0 && result_local != nullptr);
-			return { success, result_local };
-			});
-		auto future_status = future.wait_for(std::chrono::milliseconds(250));
-		if (future_status == std::future_status::ready) {
-			auto [success, result] = future.get();
-			results[1] = success;
-			if (result) {
-				freeaddrinfo(result);
-			}
-		}
-		else {
-			results[1] = false;  // Timeout or deferred
-		}
-	}
-	return results;
+    constexpr auto timeout = std::chrono::milliseconds(250);
+    std::vector<bool> results(2, false);
+    // Custom DNS server
+    if (!dns_server_ip.empty()) {
+        results[0] = resolve_with_system_dns(hostname, dns_server_ip, timeout);
+    }
+    // System resolver
+    addrinfo hints{};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    addrinfo* result = nullptr;
+    auto start = std::chrono::steady_clock::now();
+    int status = getaddrinfo(
+        hostname.c_str(),
+        nullptr,
+        &hints,
+        &result);
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    if (status == 0 &&
+        result != nullptr &&
+        elapsed <= timeout) {
+        results[1] = true;
+    }
+    if (result)
+        freeaddrinfo(result);
+    return results;
 }
 
 struct NetworkInfo {
@@ -597,12 +629,44 @@ struct WifiConnectionInfo {
     std::string WCipherAlgo;
 };
 
+struct UncProbeState {
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::string path;
+    bool stop = false;
+    bool result = false;
+    bool ready = false;
+};
+
 static bool is_unc_available(const char* unc) {
-	auto future = std::async(std::launch::async, [&]() {
-		DWORD attr = GetFileAttributesA(unc);
-		return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY);
-		});
-	return (future.wait_for(std::chrono::milliseconds(250)) == std::future_status::ready ? future.get() : false);
+    if (!unc || !*unc)
+        return false;
+    UncProbeState state;
+    state.path = unc;
+    std::thread worker([&state]() {
+        DWORD attr = GetFileAttributesA(state.path.c_str());
+        {
+            std::lock_guard lock(state.mutex);
+            state.result =
+                attr != INVALID_FILE_ATTRIBUTES &&
+                (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            state.ready = true;
+        }
+        state.cv.notify_one();
+    });
+    {
+        std::unique_lock lock(state.mutex);
+        bool completed = state.cv.wait_for(
+            lock,
+            std::chrono::milliseconds(250),
+            [&state]() { return state.ready; });
+        if (!completed) {
+            worker.detach();
+            return false;
+        }
+    }
+    worker.join();
+    return state.result;
 }
 
 static std::filesystem::path get_exe_dir() {
@@ -1895,6 +1959,16 @@ void PrepareTerminal(short rows) {
     SetConsoleWindowInfo(hOut, TRUE, &rect);
 }
 
+static void sleep_until_next_tick(std::chrono::steady_clock::time_point loop_start) {
+	// Clamp sleep time to 0 <= ... <= 1 seconds VERY defensively 
+	// - this keeps the loop timing as synchronized as possible without starting on multithreading
+    constexpr auto interval = std::chrono::seconds(1);
+    const auto next_tick = loop_start + interval;
+    const auto now = std::chrono::steady_clock::now();
+    if (now < next_tick)
+        std::this_thread::sleep_until(next_tick);
+}
+
 int main(int argc, char* argv[]) {
 	using namespace std::string_view_literals;
 
@@ -1967,7 +2041,7 @@ int main(int argc, char* argv[]) {
 		while (g_running.load()) { // check if it should even run any more
 			countRun(); // register the run
 			SHORT linecount = 8; // covers start -> dns resolution - inc from there
-			linecount += 16; // for margin
+			linecount += 14; // for margin
 			auto loop_start = std::chrono::steady_clock::now();
 			update_status();
 
@@ -2102,14 +2176,12 @@ int main(int argc, char* argv[]) {
 			if (timer_start >= (time_end - std::chrono::seconds(1))) {
 				// Grace period to avoid false positives the first second of execution
 				status_check(true); // perform a status check without logging
-				// Also clamp sleep time to 0 <= ... <= 1 seconds VERY defensively 
-				// - this keeps the loop timing as synchronized as possible without starting on multithreading
-				std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, std::chrono::duration_cast<std::chrono::seconds>(time_end - loop_start))));
+				sleep_until_next_tick(loop_start);
 				// do not continue execution, do a new loop
 				continue;
 			}
 			status_check();
-			std::this_thread::sleep_for(std::max(std::chrono::seconds{ 0 }, std::chrono::seconds(1) - std::min(std::chrono::seconds{ 1 }, std::chrono::duration_cast<std::chrono::seconds>(time_end - loop_start))));
+			sleep_until_next_tick(loop_start);
 		}
 		WSACleanup();
 		std::cout << WRAP; std::cout.flush();
