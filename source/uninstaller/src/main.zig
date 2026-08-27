@@ -9,26 +9,16 @@ const c = @cImport({
 //? and the entirety of the file is written for 0.15.2 jank which will NOT be updated bc i hate working on this
 
 // and reg consts for compat
-const REG_DWORD: c.DWORD = 4;
-const REG_SZ: c.DWORD = 1;
 const HKLM: usize = 0x80000002;
-const HKCU: usize = 0x80000001;
 
 //* HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER are Win32 predefined pseudo-handles (0x80000002 and 0x80000001 respectively).
 //* Zig 0.15.2's @cImport represents HKEY as an aligned C pointer ([*c]struct_HKEY__) and therefore cannot represent this value directly.
 //* Keep the root handle as usize and use the ABI-compatible function signature below.
 
-const RegCreateKeyExW = @as(*const fn (
-    usize,
+const RegDeleteKeyW = @as(*const fn (
+    c.HKEY,
     [*:0]const u16,
-    c.DWORD,
-    ?[*:0]u16,
-    c.DWORD,
-    c.REGSAM,
-    ?*c.SECURITY_ATTRIBUTES,
-    *c.HKEY,
-    ?*c.DWORD,
-) callconv(.winapi) c.LSTATUS, @ptrCast(&c.RegCreateKeyExW));
+) callconv(.winapi) c.LSTATUS, @ptrCast(&c.RegDeleteKeyW));
 
 const RegOpenKeyExW = @as(*const fn (
     usize,
@@ -46,12 +36,22 @@ var MSI_INSTALL: bool = undefined;
 // defer arena.deinit();
 // const allocator: std.mem.Allocator = arena.allocator();
 
-fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
-    const key: c.HKEY = undefined;
+fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
+    var key: c.HKEY = undefined;
     var ty: c.DWORD = undefined;
-    // get the required size of u16 array
     var size: c.DWORD = 0;
-    var result = c.RegQueryValueExW(
+    var result = RegOpenKeyExW(
+        HKLM,
+        std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+        0,
+        c.KEY_QUERY_VALUE | c.KEY_WOW64_64KEY,
+        &key,
+    );
+    defer _ = c.RegCloseKey(key);
+    if (result != 0)
+        return error.RegOpenKeyFailed;
+    // get the required size of u16 array
+    result = c.RegQueryValueExW(
         key,
         std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
         null,
@@ -59,9 +59,6 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
         null,
         &size,
     );
-    defer _ = c.RegCloseKey(key);
-    if (result != 0)
-        return error.OpenKeyFailed;
     //// std.debug.assert(ty == windows.REG_SZ); // debug assert type is REG_SZ (the expected type)
     // read in the value
     const utf16: []u16 = try arena.alloc(u16, size / @sizeOf(u16));
@@ -75,7 +72,7 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
         &size,
     );
     if (result != 0)
-        return error.OpenKeyFailed;
+        return error.RegQueryValueFailed;
     // normalize and convert
     const len = std.mem.indexOfScalar(u16, utf16, 0) orelse utf16.len;
     const install_path: []u8 = try std.unicode.utf16LeToUtf8Alloc(arena, utf16[0..len]);
@@ -83,66 +80,8 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
     return install_path;
 }
 
-fn _doGetInstallDir_CWD(arena: std.mem.Allocator) ![]u8 {
-    // current directory is plausible
-    var installDir: []u8 = try std.process.getEnvVarOwned(arena, "cd");
-    defer arena.free(installDir);
-    // see if executable is here
-    if (blk: {
-        //? this check is only performed twice so im not bothering to make it its own fn
-        std.fs.cwd().access(
-            try std.fs.path.join(arena, &.{
-                installDir,
-                "DDCL.exe",
-            }), .{}, )
-        catch |err| {
-            if (err != error.FileNotFound) {
-                return err;
-            }
-            break :blk false; // FileNotFound
-        };
-        break :blk true; // access succeeded
-    }) {
-        return installDir;
-    } {
-        // else try the default install path of the MSI
-        installDir = try arena.dupe(u8, "C:\\Program Files\\DDCL");
-        if (blk: {
-            std.fs.cwd().access(
-                try std.fs.path.join(arena, &.{
-                    installDir,
-                    "DDCL.exe"
-                }), .{})
-            catch |err| {
-                if (err != error.FileNotFound) {
-                    return err;
-                }
-                std.debug.print("File does not exist\n", .{});
-                break :blk false; // FileNotFound
-            };
-            break :blk true; // access succeeded
-        }) {
-            return installDir;
-        }
-    }
-    // couldnt verify dir
-    return error.FileNotFound;
-}
-
-fn getInstallDir(arena: std.mem.Allocator) ![]u8 {
-    var installDir: []u8 = undefined;
-    if (MSI_INSTALL) {
-        // if msi installed, check the registry key for location and assume it to be correct.
-        installDir = try _doGetInstallDir_MSI(arena);
-    } {
-        // else use cwd
-        installDir = try _doGetInstallDir_CWD(arena);
-    }
-    return installDir;
-}
-
 fn removeShortcut() bool {
-    _ = std.fs.deleteTreeAbsolute("C:\\ProgramData\\Microsoft\\Windows\\tart Menu\\Programs\\DDCL") catch |err| {
+    _ = std.fs.deleteTreeAbsolute("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\DDCL") catch |err| {
         // still return a bool on failure
         std.debug.print("Error: {}\n", .{err});
         return false;
@@ -151,7 +90,7 @@ fn removeShortcut() bool {
     return true;
 }
 
-fn cleanPath(arena: std.mem.Allocator, wanted: []const u8) bool {
+fn _doCleanPath(arena: std.mem.Allocator, wanted: []const u8) !bool {
     const subkey = std.unicode.utf8ToUtf16LeStringLiteral(
         "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
     );
@@ -186,7 +125,8 @@ fn cleanPath(arena: std.mem.Allocator, wanted: []const u8) bool {
         arena,
         utf16_buffer[0..utf16_len],
     ) catch return false;
-    var updated = std.ArrayList(u8).init(arena);
+    var updated = std.ArrayList(u8){};
+    defer updated.deinit(arena);
     var removed = false;
     var entries = std.mem.splitScalar(u8, current, ';');
     while (entries.next()) |entry_raw| {
@@ -208,9 +148,9 @@ fn cleanPath(arena: std.mem.Allocator, wanted: []const u8) bool {
             continue;
         }
         if (updated.items.len != 0) {
-            try updated.append(';');
+            try updated.append(arena, ';');
         }
-        try updated.appendSlice(entry_raw);
+        try updated.appendSlice(arena, entry_raw);
     }
     // Nothing was removed, but the operation itself succeeded.
     if (!removed) {
@@ -241,12 +181,57 @@ fn cleanPath(arena: std.mem.Allocator, wanted: []const u8) bool {
     return true;
 }
 
+fn cleanPath(arena: std.mem.Allocator, wanted: []const u8) bool {
+    const result = _doCleanPath(arena, wanted) catch {
+        return false;
+    };
+    return result;
+}
+
+fn _doEditRegistry() !void {
+    {
+        const result = RegDeleteKeyW(
+            HKLM,
+            std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+        );
+        if (result != 0)
+            return error.RegDeleteKeyFailed;
+    }
+    {
+        var key: c.HKEY = undefined;
+        var result = RegOpenKeyExW(
+            HKLM,
+            std.unicode.utf8ToUtf16LeStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Run"),
+            0,
+            c.KEY_WRITE | c.KEY_WOW64_64KEY,
+            &key,
+        );
+        if (result != 0)
+            return error.RegOpenKeyFailed;
+        defer _ = c.RegCloseKey(key);
+        result = c.RegDeleteValueW(
+            key,
+            std.unicode.utf8ToUtf16LeStringLiteral("DDCL")
+        );
+        if (result != 0)
+            return error.RegDeleteValueFailed;
+    }
+}
+
+fn editRegistry() bool {
+    _ = _doEditRegistry() catch {
+        return false;
+    };
+    return true;
+}
+
 fn _doTasks(arena: std.mem.Allocator) !bool {
     const installDir: []u8 = try getInstallDir(arena);
         defer arena.free(installDir);
     const lnkStatus = removeShortcut();
     const pathStatus = cleanPath(arena, installDir);
-    return (lnkStatus & pathStatus & (installDir.len != 0));
+    const regStatus = editRegistry();
+    return (lnkStatus & pathStatus & regStatus & (installDir.len != 0));
 }
 
 fn onFail(writer: *std.Io.Writer, err: anyerror) !void {
@@ -318,7 +303,7 @@ pub fn main() !void {
     };
 
     if (!status) {
-        try onFail(stdout_writer, error.null);
+        try onFail(stdout_writer, error.taskFailed);
         try stdout_writer.flush();
         return;
     }

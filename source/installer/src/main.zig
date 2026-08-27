@@ -12,7 +12,6 @@ const c = @cImport({
 const REG_DWORD: c.DWORD = 4;
 const REG_SZ: c.DWORD = 1;
 const HKLM: usize = 0x80000002;
-const HKCU: usize = 0x80000001;
 
 //* HKEY_LOCAL_MACHINE and HKEY_CURRENT_USER are Win32 predefined pseudo-handles (0x80000002 and 0x80000001 respectively).
 //* Zig 0.15.2's @cImport represents HKEY as an aligned C pointer ([*c]struct_HKEY__) and therefore cannot represent this value directly.
@@ -47,11 +46,21 @@ var MSI_INSTALL: bool = undefined;
 // const allocator: std.mem.Allocator = arena.allocator();
 
 fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
-    const key: c.HKEY = undefined;
+    var key: c.HKEY = undefined;
     var ty: c.DWORD = undefined;
-    // get the required size of u16 array
     var size: c.DWORD = 0;
-    var result = c.RegQueryValueExW(
+    var result = RegOpenKeyExW(
+        HKLM,
+        std.unicode.utf8ToUtf16LeStringLiteral("Software\\DDCL"),
+        0,
+        c.KEY_QUERY_VALUE | c.KEY_WOW64_64KEY,
+        &key,
+    );
+    defer _ = c.RegCloseKey(key);
+    if (result != 0)
+        return error.RegOpenKeyFailed;
+    // get the required size of u16 array
+    result = c.RegQueryValueExW(
         key,
         std.unicode.utf8ToUtf16LeStringLiteral("InstallPath"),
         null,
@@ -59,9 +68,6 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
         null,
         &size,
     );
-    defer _ = c.RegCloseKey(key);
-    if (result != 0)
-        return error.OpenKeyFailed;
     //// std.debug.assert(ty == windows.REG_SZ); // debug assert type is REG_SZ (the expected type)
     // read in the value
     const utf16: []u16 = try arena.alloc(u16, size / @sizeOf(u16));
@@ -75,7 +81,7 @@ fn _doGetInstallDir_MSI(arena: std.mem.Allocator) ![]u8 {
         &size,
     );
     if (result != 0)
-        return error.OpenKeyFailed;
+        return error.RegQueryValueFailed;
     // normalize and convert
     const len = std.mem.indexOfScalar(u16, utf16, 0) orelse utf16.len;
     const install_path: []u8 = try std.unicode.utf16LeToUtf8Alloc(arena, utf16[0..len]);
@@ -231,39 +237,6 @@ fn editRegistry(installDir: []u8) bool {
     };
     return true;
 }
-
-// fn deleteValue() void {
-//     var key: windows.HKEY = undefined;
-
-//     const path = std.unicode.utf8ToUtf16LeStringLiteral(
-//         "Software\\MyApp",
-//     );
-
-//     if (RegOpenKeyExW(
-//         HKCU,
-//         path,
-//         0,
-//         windows.KEY_WRITE | windows.KEY_WOW64_64KEY,
-//         &key,
-//     ) != 0) return;
-
-//     defer _ = windows.c.RegCloseKey(key);
-
-//     const name = std.unicode.utf8ToUtf16LeStringLiteral(
-//         "Enabled",
-//     );
-
-//     _ = windows.c.RegDeleteValueW(key, name);
-
-//     const path = std.unicode.utf8ToUtf16LeStringLiteral(
-//         "Software\\MyApp",
-//     );
-
-//     _ = windows.c.RegDeleteKeyW(
-//         @ptrCast(@alignCast(HKCU)),
-//         path,
-//     );
-//     }
 
 fn _doAddShortcut(arena: std.mem.Allocator, installDir: []u8) !void {
     //* let errors propagate out
