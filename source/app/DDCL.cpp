@@ -1999,7 +1999,6 @@ int main(int argc, char* argv[]) {
 				auto [ptr, ec] = std::from_chars(number.data(), number.data() + number.size(), count);
 				if (ec != std::errc{} || ptr != number.data() + number.size()) {
 					// Invalid number
-					// TODO: Emit a warn here.
 					count = 1; //* gonna assume 1
 				}
 			}
