@@ -1181,12 +1181,14 @@ static void log_change(const status_change_type diff, std::string time, void* in
 	// We make an internal copy into `storage.strings`
 	void* info_copy = info;
 
+	// only init one oss per call
+	std::ostringstream oss;
+
 	// These are going to be a bit monolithic but relatively straightforward
 	// The given status_change_type determines the formatting of the log entry, 
 	// for which the relevant info is already known - this just translates a lot of information into simple strings for logging.
 	switch (diff) {
 		case status_change_type::internet_connectivity: {
-			std::ostringstream oss;
 			oss << time << ",internet_connectivity," << (curr_internet ? "online" : "offline");
 			write_to_log(oss.str());
 			break;
@@ -1195,8 +1197,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 		case status_change_type::ethernet: {
 			if (info_copy == nullptr || !info_copy) {
 				// nothing passed, ethernet info change
-				// TODO: remove multiple uses of oss. clean up
-				std::ostringstream oss;
 				// safely assume non-empty strings
 				const char* friendly = curr_EthernetInfo.FName.c_str();
 				const char* c_suffix = curr_EthernetInfo.DNSSuffix.c_str();
@@ -1263,7 +1263,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				// a string is passed through info field - log it with current info
 				if (incoming) {
 					storage.strings.push_back(*incoming); // borrow some global memory
-					std::ostringstream oss;
 					const char* friendly = curr_EthernetInfo.FName.empty() ? curr_EthernetInfo.FName.c_str() : "N/A";
 					const char* c_suffix = curr_EthernetInfo.DNSSuffix.empty() ? curr_EthernetInfo.DNSSuffix.c_str() : "N/A";
 					oss << time << ",ethernet," << friendly << ";" << c_suffix << "," << storage.strings.back();
@@ -1271,7 +1270,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				}
 				else {
 					// failed to fetch string
-					std::ostringstream oss;
 					oss << time << ",ethernet,UNKNOWN,info_unavailable";
 					write_to_log(oss.str());
 				}
@@ -1282,8 +1280,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 		case status_change_type::wlan: {
 			if (info_copy == nullptr || !info_copy) {
 				// nothing passed, wlan info change
-				// TODO: remove multiple uses of oss. clean up
-				std::ostringstream oss;
 				// safely assume non-empty strings
 				const char* friendly = curr_WLANInfo.FName.c_str();
 				const char* c_suffix = curr_WLANInfo.DNSSuffix.c_str();
@@ -1356,7 +1352,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				// a string is passed through info field - log it with current info
 				if (incoming) {
 					storage.strings.push_back(*incoming); // borrow some global memory
-					std::ostringstream oss;
 					const char* friendly = curr_WLANInfo.FName.empty() ? curr_WLANInfo.FName.c_str() : "N/A";
 					const char* c_suffix = curr_WLANInfo.DNSSuffix.empty() ? curr_WLANInfo.DNSSuffix.c_str() : "N/A";
 					oss << time << ",wlan," << friendly << ";" << c_suffix << "," << storage.strings.back();
@@ -1364,7 +1359,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				}
 				else {
 					// failed to fetch string
-					std::ostringstream oss;
 					oss << time << ",wlan,UNKNOWN,info_unavailable";
 					write_to_log(oss.str());
 				}
@@ -1373,7 +1367,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 		}
 
 		case status_change_type::dns_resolution: {
-			std::ostringstream oss;
 			oss << time << ",dns_resolution,"
 				<< net.check << ":[sys_dns:" << (curr_resolve_by_dns[0] ? "True;" : "False;") \
 				<< net.dns << (curr_resolve_by_dns[1] ? ":True" : ":False") \
@@ -1384,7 +1377,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 		}
 
 		case status_change_type::vpn_connection: {
-			std::ostringstream oss;
 			oss << time << ",vpn_connection," << (curr_vpn_host.connected
 				? "connected," + curr_vpn_host.name + ";" + curr_vpn_host.hostname + ";" + curr_vpn_host.local_ip
 				: "not_connected,") ;
@@ -1410,7 +1402,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 			}
 			try {
 				char driveLetter = _STRING__CHAR(&disks.locals[idx]);
-				std::ostringstream oss;
 				oss << time << ",drive_availability,"
 					<< (curr_drives[idx] ? "available," : "unavailable,")
 					<< driveLetter;
@@ -1418,7 +1409,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 			}
 			catch (const std::exception& ex) {
 				std::cerr << "\nError extracting drive letter in log_change: " << ex.what() << std::endl;
-				std::ostringstream oss;
 				oss << time << ",drive_availability,unavailable,drive letter unavailable";
 				write_to_log(oss.str());
 			}
@@ -1432,7 +1422,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				return;
 			}
 			std::string uncPath = disks.unc[idx];
-			std::ostringstream oss;
 			oss << time << ",unc_availability,"
 				<< (curr_unc[idx] ? "available," : "unavailable,")
 				<< uncPath;
