@@ -1739,7 +1739,6 @@ static void initialize_runtime() {
 				status_change_type::drive_availability,
 				status_change_type::unc_availability
 			};
-			// TODO: add a trigger for defaults application and a cerr warn with user confirmation that defaults should be used
 			// prolly add log events for it too
 		}
 	}
