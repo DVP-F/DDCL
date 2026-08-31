@@ -1851,10 +1851,10 @@ static void print_help_text(char* calltext) {
 	std::cout << "  -h --help" << std::endl;
 	std::cout << "      Display this help message" << std::endl;
 	std::cout << "  -c --config" << std::endl;
-	std::cout << "      Display a configuration summary" << RESET << std::endl;
+	std::cout << "      Display a configuration summary"<< std::endl;
 	std::cout << "  -t --times:<count>" << std::endl;
 	std::cout << "      Run detection loop <count> times. Defaults to 0." << std::endl;
-	std::cout << "      If <count> is not given correctly, assumes 1." << std::endl << std::endl;
+	std::cout << "      If <count> is not given correctly, assumes 1." << RESET  << std::endl << std::endl;
 	std::cout << "DDCL is a tool for surveying network and storage status changes." << std::endl;
 	std::cout << "Checks are performed once every second and logged to a location given through a fallback chain." << std::endl;
 	std::cout << " (See documentation at https://github.com/DVP-F/DDCL for detail)" << std::endl;
@@ -2104,7 +2104,7 @@ int main(int argc, char* argv[]) {
 					std::cout << "  " << BOLD << "Hostname: " << RESET << curr_vpn_host.hostname \
 					<< RESET " {" << ((!net.expected_vpn_hostname.empty() && 
 						std::regex_match(curr_vpn_host.hostname, std::regex(net.expected_vpn_hostname, std::regex_constants::icase)))
-						? GREEN "MATCH" : RED "NO MATCH") << "}\n";
+						? GREEN "MATCH" : RED "NO MATCH") << RESET << "}\n";
 					std::cout << "  " << BOLD << "Local IP: " << RESET << curr_vpn_host.local_ip << std::endl;
 					linecount += 3;
 				}
