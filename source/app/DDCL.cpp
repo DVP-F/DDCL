@@ -2187,14 +2187,21 @@ int main(int argc, char* argv[]) {
 			// and unc paths
 			std::cout << "\n" << BOLD << "UNC:" << RESET << std::endl;
 			linecount++;
+			size_t max_width = 0;
+			for (int st = 0; st < curr_unc.size(); ++st) {
+				std::string s = disks.unc[st];
+				if (s.size() > max_width) max_width = s.size();
+			}
 			for (int st = 0; st < curr_unc.size(); st++) {
 				linecount++;
 				bool status = curr_unc[st];
-				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED)) << "  " \
-				<< disks.unc[st] << " " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
+				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED))
+				<< "  " << std::setw(static_cast<int>(max_width)) << std::left << disks.unc[st] \
+				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
-			std::cout << "\n" << BOLD << MAGENTA << "Monitoring..." << RESET << std::endl;
-			std::cout << BLUE << "Log path: " << log_path.string().c_str() << "\n" << RESET << std::endl;
+			// extra info (meta)
+			std::cout << std::endl << BOLD << MAGENTA << "Monitoring..." << RESET << std::endl;
+			std::cout << BLUE << "Log path: " << log_path.string().c_str() << RESET << std::endl << std::endl;
 			linecount += 2;
 
 			// update window size
