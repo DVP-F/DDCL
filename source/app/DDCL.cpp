@@ -448,7 +448,7 @@ static bool udp_dns_test(const char* dns_ip) {
 }
 
 // Lightweight HTTP HEAD probe using WinINet (fallback when InternetCheckConnection is unreliable)
-static bool http_head_probe(const char* url_cstr, DWORD timeout_ms = 1000) {
+static bool http_head_probe(const char* url_cstr, DWORD timeout_ms = 500) {
     if (!url_cstr || !*url_cstr)
         return false;
     std::wstring wurl = to_wide(url_cstr);
@@ -1199,9 +1199,8 @@ static void write_to_log(const std::string& message) {
 		out << message << "\r\n";
 		out.flush();
 		if (out.fail()) {
-			std::cerr << "FLUSH FAILED after write! path=[" << log_path.string() << "]\n";
 			DWORD err = GetLastError();
-			std::cerr << "  GetLastError()=" << err << std::endl;
+			std::cerr << "FLUSH FAILED after write! path=[" << err << " path=[" << log_path.string() << "]\n";
 			return;
 		}
 		out.close();  // Explicit close
@@ -1926,7 +1925,7 @@ static void print_config_summary(char* choice) {
 	std::cout << RESET BOLD << "Log Path: " << RESET BLUE << log_path.remove_filename().string() << RESET << std::endl;
 	std::cout << BOLD << "Virtual Terminal Processing: " << RESET YELLOW << (use_vt ? "Requested" : "Not Requested\n\n");
 	if (use_vt) {
-		std::cout << RESET BOLD << ", Status: " << (vt_enabled ? GREEN "ON" : YELLOW "OFF") << RESET << "\n\n"; // This will be set in initialize_runtime after attempting to enable VT
+		std::cout << RESET BOLD << ", Status: " << RESET << (vt_enabled ? GREEN "ON" : YELLOW "OFF") << RESET << "\n\n"; // This will be set in initialize_runtime after attempting to enable VT
 	}
 	std::cout << "Network:" << std::endl;
 	std::cout << "  Check Host: " << BOLD << net.check << RESET << std::endl;
@@ -2147,7 +2146,7 @@ int main(int argc, char* argv[]) {
 				}
 			}
 			else {
-				std::cout << YELLOW "  No active VPN connection detecd\n" RESET << std::endl ;
+				std::cout << YELLOW "  No active VPN connection detected\n" RESET << std::endl ;
 				linecount++;
 			}
 			// session info
