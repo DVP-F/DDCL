@@ -96,6 +96,7 @@ call "%VC_VARS%" x64
 REM Compile runner (DiskDriveConnectionLogger.cpp)
 REM This assumes you have VS installed and it supports compiling C++17
 %CLANG_PATH% /EHsc /std:c++17 /c ..\source\app\DDCL.cpp /Fo:"runner.obj"
+:: Debug build: %CLANG_PATH% /EHsc /std:c++17 /Zi /c ..\source\app\DDCL.cpp /Fo:"runner.obj"
 if exist "runner.obj" (
 	REM Compile the resource file - only run if cl compiled properly
 	%RC_PATH% /fo "runner.res" "runner.rc"
@@ -103,6 +104,7 @@ if exist "runner.obj" (
 if exist "runner.res" (
 	REM Link the runner, resource, and libs - only run if cl and rc compiled properly
 	%LINK_PATH% /SUBSYSTEM:CONSOLE "runner.obj" "runner.res" /out:"%runner_bin_name%"
+	:: Debug build: %LINK_PATH% /SUBSYSTEM:CONSOLE "runner.obj" "runner.res" /out:"%runner_bin_name%" /DEBUG
 )
 REM This compilation process is needed to include metadata 
 

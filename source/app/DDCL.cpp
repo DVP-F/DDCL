@@ -419,7 +419,7 @@ static bool udp_dns_test(const char* dns_ip) {
 		closesocket(s);
 		return false;
 	}
-	uint8_t query[] = { 0xAB,0xCD, 0x01,0x00, 0x00,0x01, 0x00,0x00,0x00,0x00,0x00,0x00, 0x00,0x01 };
+	uint8_t query[14] = { 0xAB,0xCD, 0x01,0x00, 0x00,0x01, 0x00,0x00,0x00,0x00,0x00,0x00, 0x00,0x01 };
 	auto future = std::async(std::launch::async, [s, sa, query]() mutable -> bool {
 		BOOL bNewBehavior = FALSE;
 		DWORD dwBytesReturned = 0;
@@ -630,43 +630,86 @@ struct WifiConnectionInfo {
 };
 
 struct UncProbeState {
-    std::mutex mutex;
-    std::condition_variable cv;
-    std::string path;
-    bool stop = false;
-    bool result = false;
-    bool ready = false;
+	std::string path;
+	std::mutex mutex;
+	std::condition_variable cv;
+	std::exception_ptr exception;
+	bool result = false;
+	bool ready = false;
 };
+
+static std::atomic<unsigned> g_active_unc_probes{0};
 
 static bool is_unc_available(const char* unc) {
     if (!unc || !*unc)
         return false;
-    UncProbeState state;
-    state.path = unc;
-    std::thread worker([&state]() {
-        DWORD attr = GetFileAttributesA(state.path.c_str());
-        {
-            std::lock_guard lock(state.mutex);
-            state.result =
-                attr != INVALID_FILE_ATTRIBUTES &&
-                (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
-            state.ready = true;
+
+    constexpr unsigned MAX_UNC_PROBES = 5;
+    constexpr auto TIMEOUT = std::chrono::milliseconds(250);
+    unsigned current = g_active_unc_probes.load(std::memory_order_relaxed);
+
+    for (;;) {
+		// if 5 workers havent returned for getattributes, assume false and dont create more.
+        if (current >= MAX_UNC_PROBES)
+            return false;
+        if (g_active_unc_probes.compare_exchange_weak(
+                current,
+                current + 1,
+                std::memory_order_acquire,
+                std::memory_order_relaxed)) {
+            break;
         }
-        state.cv.notify_one();
+    }
+
+    auto state = std::make_shared<UncProbeState>();
+    state->path = unc;
+
+    std::thread worker([state]() {
+        struct ProbeGuard {
+            ~ProbeGuard() {
+                g_active_unc_probes.fetch_sub(
+                    1,
+                    std::memory_order_release);
+            }
+        } guard;
+        try {
+            DWORD attr = GetFileAttributesA(state->path.c_str());
+            {
+                std::lock_guard lock(state->mutex);
+                state->result =
+                    attr != INVALID_FILE_ATTRIBUTES &&
+                    (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                state->ready = true;
+            }
+        }
+        catch (...) {
+            {
+                std::lock_guard lock(state->mutex);
+                state->exception = std::current_exception();
+                state->ready = true;
+            }
+        }
+        state->cv.notify_one();
     });
+
     {
-        std::unique_lock lock(state.mutex);
-        bool completed = state.cv.wait_for(
+        std::unique_lock lock(state->mutex);
+        bool completed = state->cv.wait_for(
             lock,
-            std::chrono::milliseconds(250),
-            [&state]() { return state.ready; });
+            TIMEOUT,
+            [&state]() {
+                return state->ready;
+            });
         if (!completed) {
             worker.detach();
             return false;
         }
     }
+
     worker.join();
-    return state.result;
+    if (state->exception)
+        std::rethrow_exception(state->exception);
+    return state->result;
 }
 
 static std::filesystem::path get_exe_dir() {
