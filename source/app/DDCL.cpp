@@ -216,7 +216,10 @@ struct NetworkConfig {
 
 struct DiskConfig {
 	std::vector<std::string> locals;
+	std::vector<std::string> locals_labels;
+	std::vector<int> locals_imp;
 	std::vector<std::string> unc;
+	std::vector<std::string> unc_labels;
 	std::vector<int> unc_imp;
 };
 
@@ -1797,23 +1800,60 @@ static void initialize_runtime() {
 	}
 	// DiskConfig disks;
 	if (auto disks_tbl = tbl["Disks"].as_table()) {
+		// Locals
 		if (auto arr = disks_tbl->operator[]("locals").as_array()) {
-			for (auto& v : *arr)
-				if (auto s = v.value<std::string_view>())
-					disks.locals.emplace_back(s->data(), s->size());
-		}
-		if (auto arr = disks_tbl->operator[]("unc").as_array()) {
-			for (auto& v : *arr)
+			for (auto& v : *arr) {
 				if (auto s = v.value<std::string_view>()) {
-					// Expand $username and $userdomain placeholders at config-load time
-					std::string unc = std::string(s->data(), s->size());
+					std::string local(s->data(), s->size());
+					// Parse optional <label># or <label>#! prefix.
+					std::string label;
+					int importance = 0;
+					const std::size_t hash_pos = local.find('#');
+					if (hash_pos != std::string::npos) {
+						label = local.substr(0, hash_pos);
+						if (hash_pos + 1 < local.size() && local[hash_pos + 1] == '!') {
+							importance = 1;
+							local.erase(0, hash_pos + 2);
+						}
+						else {
+							local.erase(0, hash_pos + 1);
+						}
+					}
+					disks.locals.emplace_back(std::move(local));
+					disks.locals_labels.emplace_back(std::move(label));
+					disks.locals_imp.push_back(importance);
+				}
+			}
+		}
+		// UNC
+		if (auto arr = disks_tbl->operator[]("unc").as_array()) {
+			for (auto& v : *arr) {
+				if (auto s = v.value<std::string_view>()) {
+					std::string unc(s->data(), s->size());
+					// Parse optional <label># or <label>#! prefix.
+					std::string label;
+					int importance = 0;
+					const std::size_t hash_pos = unc.find('#');
+					if (hash_pos != std::string::npos) {
+						label = unc.substr(0, hash_pos);
+						if (hash_pos + 1 < unc.size() && unc[hash_pos + 1] == '!') {
+							importance = 1;
+							unc.erase(0, hash_pos + 2);
+						}
+						else {
+							unc.erase(0, hash_pos + 1);
+						}
+					}
+					// Expand $username and $userdomain placeholders at config-load time.
 	#pragma warning(disable:4996)
 					const char* userEnvCfg = getenv("USERNAME");
 					const char* userDomainEnvCfg = getenv("USERDNSDOMAIN");
 	#pragma warning(default:4996)
-					std::string username = userEnvCfg ? std::string(userEnvCfg) : std::string();
-					std::string userdomain = userDomainEnvCfg ? std::string(userDomainEnvCfg) : std::string();
-					// u/n
+					std::string username =
+						userEnvCfg ? std::string(userEnvCfg) : std::string();
+					std::string userdomain =
+						userDomainEnvCfg ? std::string(userDomainEnvCfg) : std::string();
+					// $username
 					{
 						const std::string placeholder = "$username";
 						std::size_t pos = 0;
@@ -1822,7 +1862,7 @@ static void initialize_runtime() {
 							pos += username.size();
 						}
 					}
-					// domain
+					// $userdomain
 					{
 						const std::string placeholder = "$userdomain";
 						std::size_t pos = 0;
@@ -1832,15 +1872,10 @@ static void initialize_runtime() {
 						}
 					}
 					disks.unc.emplace_back(std::move(unc));
-					// update unc_imp based off s[0:1]
-					if (s->size() > 2 && s->substr(0, 2) == "#!") {
-						disks.unc_imp.push_back(1); // high importance
-						disks.unc.back().erase(0, 2); // remove the importance marker from the actual path
-					}
-					else {
-						disks.unc_imp.push_back(0); // normal importance
-					}
+					disks.unc_labels.emplace_back(std::move(label));
+					disks.unc_imp.push_back(importance);
 				}
+			}
 		}
 	}
 
@@ -2182,24 +2217,39 @@ int main(int argc, char* argv[]) {
 			// local drives
 			std::cout << "\n" << BOLD << "Drives:" << RESET << std::endl;
 			linecount++;
+			size_t max_width_locals = 0;
+			for (int st = 0; st < curr_drives.size(); ++st) {
+				std::string s = disks.locals[st];
+				std::string s_l = disks.locals_labels[st];
+				size_t new_size = s.size() + s_l.size() + 2 + (s_l.size() != 0 ? 3 : 0);
+				if (new_size > max_width_locals) max_width_locals = new_size;
+			}
 			for (int st = 0; st < curr_drives.size(); st++) {
 				linecount++;
-				bool status = curr_drives[st];				// actually fine bc they're synced
-				std::cout << (status ? GREEN : RED) << "  " << disks.locals[st] << " " << (status ? "OK" : "FAIL") << RESET << std::endl;
+				bool status = curr_drives[st];
+				std::cout << (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED))
+				<< "  " << std::setw(static_cast<int>(max_width_locals)) << std::left \
+				<< (disks.locals_labels[st].size() != 0 ? disks.locals_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
+					(disks.locals_imp[st] == 0 ? YELLOW : RED)) + disks.locals[st] : disks.locals[st] ) + ":\\" \
+				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
 			// and unc paths
 			std::cout << "\n" << BOLD << "UNC:" << RESET << std::endl;
 			linecount++;
-			size_t max_width = 0;
+			size_t max_width_unc = 0;
 			for (int st = 0; st < curr_unc.size(); ++st) {
 				std::string s = disks.unc[st];
-				if (s.size() > max_width) max_width = s.size();
+				std::string s_l = disks.unc_labels[st];
+				size_t new_size = s.size() + s_l.size() + (s_l.size() != 0 ? 3 : 0);
+				if (new_size > max_width_unc) max_width_unc = new_size;
 			}
 			for (int st = 0; st < curr_unc.size(); st++) {
 				linecount++;
 				bool status = curr_unc[st];
 				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED))
-				<< "  " << std::setw(static_cast<int>(max_width)) << std::left << disks.unc[st] \
+				<< "  " << std::setw(static_cast<int>(max_width_unc)) << std::left \
+				<< (disks.unc_labels[st].size() != 0 ? disks.unc_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
+					(disks.unc_imp[st] == 0 ? YELLOW : RED)) + disks.unc[st] : disks.unc[st] ) \
 				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
 			// extra info (meta)
