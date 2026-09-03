@@ -1450,9 +1450,10 @@ static void log_change(const status_change_type diff, std::string time, void* in
 			}
 			try {
 				char driveLetter = _STRING__CHAR(&disks.locals[idx]);
+				std::string label = disks.locals_labels[idx];
 				oss << time << ",drive_availability,"
 					<< (curr_drives[idx] ? "available," : "unavailable,")
-					<< driveLetter;
+					<< driveLetter << ':' << label;
 				write_to_log(oss.str());
 			}
 			catch (const std::exception& ex) {
@@ -1470,9 +1471,10 @@ static void log_change(const status_change_type diff, std::string time, void* in
 				return;
 			}
 			std::string uncPath = disks.unc[idx];
+			std::string label = disks.unc_labels[idx];
 			oss << time << ",unc_availability,"
 				<< (curr_unc[idx] ? "available," : "unavailable,")
-				<< uncPath;
+				<< uncPath << ':' << label;
 			write_to_log(oss.str());
 			break;
 		}

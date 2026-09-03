@@ -17,8 +17,6 @@
         -> Commandline use  
 4. Prep for use in-prod  
     -> Update documentation and make techincal docs  
-5. Labels for UNC paths and local mounted drives  
-6. Update docs before version bump to 0.2.1
 
 ## Table and checklist  
 

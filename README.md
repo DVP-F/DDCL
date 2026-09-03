@@ -70,15 +70,15 @@ Assuming default names.
   - This registers the runner binary `DDCL.exe`, registry keys, and %PATH% for ease of 
 - DDCL-Setup.msi
   - An installer package. This copies over the necessary files (including a customized `conf.toml`)  
-    and then executes `DDCL_Installer.exe`.
-  - Compiled from `DDCL.exe`, `DDCL_Installer.exe`, `conf.toml`, and temporary files.
+    and then executes `installer.exe`.
+  - Compiled from `DDCL.exe`, `installer.exe`, `conf.toml`, and temporary files.
 
 ### Scripts and source code  
 
-- [./source/](./source/)
-  - [DDCL.cpp](./source/DDCL.cpp)
+- [./source/app/](./source/app/)
+  - [DDCL.cpp](./source/app/DDCL.cpp)
     - The main source, the actuall UI and logger.
-  - [toml.hpp](./source/toml.hpp)
+  - [toml.hpp](./source/app/toml.hpp)
     - The C++17 TOML parsing library used by DDCL.
 - [./compile/](./compile/)
   - [compile_package.bat](./compile/compile_package.bat)
@@ -109,16 +109,10 @@ Assuming default names.
     - [PERFORMANCE.md](./docs/data/PERFORMANCE.md)  
       - Documentation of performed tests  
     - Various other data  
-  - [DDCL.cpp.md](./docs/DDCL.cpp.md)  
-    - Technical documentation of [DDCL.cpp](./source/DDCL.cpp) 
-  - [compile_package.bat.md](./docs/compile_package.bat.md)  
-    - Technical documentation of [compile_package.bat](./compile/compile_package.bat)   
-  - [installer.bat.md](./docs/installer.bat.md)  
-    - Technical documentation of [installer.bat](./source/installer.bat)   
 
 ### Other files  
 
-- [./source/conf.toml](./source/conf.toml)
+- [./source/app/conf.toml](./source/app/conf.toml)
   - Depending on your installation, this will either be the default configuration or a customized one.
   This file is used by DDCL to store what, if, and how it should test things.  
 - [./bin/conf.toml](./bin/conf.toml)
@@ -132,7 +126,7 @@ Assuming default names.
 
 You can use a precompiled package from the repository or compile from source.  
 Compiling from source is easiest done with a modified `compile/compile_package.bat`  
-This will give you the executables for the runner, installer, lms, and a `.msi` package installer.  
+This will give you the executables for the runner, installer, and a `.msi` package installer.  
 
 If you do wanna compile with commands manually, all the info you need should be in the same file.  
 
@@ -184,16 +178,18 @@ Contains the following:
 
 1. `DDCL-Setup.msi`
 2. `DDCL.exe`
-3. `DDCL_Installer.exe`
-4. `conf.toml`
+3. `installer.exe`
+4. `uninstaller.exe`
+5. `conf.toml`
 
 #### Manual set (`DDCL_manual.zip`)  
 
 Contains the following:  
 
 1. `DDCL.exe`
-2. `installer.bat`
-3. `conf.toml`
+2. `installer.exe`
+3. `uninstaller.exe`
+4. `conf.toml`
 
 #### Standalone set (`DDCL_standalone.zip`)  
 
@@ -218,28 +214,27 @@ Contains the following:
    
    For Manual install:  
    
-   1. Move the `DDCL.exe` binary to the desired location.  
-   2. Run it once to generate the default configuration file (config.toml) in the same directory.  
+   1. Move the executables to the desired location.  
+   2. Run `DDCL.exe` once to generate the default configuration file (config.toml) in the same directory.  
    3. Edit the config file with what disks to check for, IP address to check connection to,  
       UNC (SMB, etc.) paths to verify, DNS ovverride, expected DNS suffix, and more.
-   4. Run either `installer.bat` or `DDCL_Installer.exe` to register the app in the start menu and PATH.  
+   4. Run `installer.exe` to register the app in the start menu and PATH.  
 
    For MSI install:  
 
    1. Run `DDCL-Setup.msi`  
-   The MSI should copy the files into either `C:\Program Files\DDCL` or `C:\Program Files (x86)\DDCL`  
-   \- and run `DDCL_Installer.exe`.
+   The MSI should copy the files into `C:\Program Files\DDCL` and run `installer.exe` for you.
 
 ### Running  
 
 Depending on how you install DDCL, you have a few options for executing it.  
 Refer to the beneath table for applicable methods of execution by installation method :)  
 
-| Execution method | Standalone EXE  | Installation script | MSI | Installer binary  |
-|:-----------------|:---------------:|:-------------------:|:---:|:-----------------:|
-| From directory   |        X        |          X          |  X  |         X         |
-| Command (`ddcl`) |                 |          X          |  X  |         X         |
-| Start menu       |                 |          X          |  X  |         X         |
+| Execution method | Standalone EXE  | MSI | Installer binary  |
+|:-----------------|:---------------:|:---:|:-----------------:|
+| From directory   |        X        |  X  |         X         |
+| Command (`ddcl`) |                 |  X  |         X         |
+| Start menu       |                 |  X  |         X         |
 
 'From directory' here includes launching from File Explorer and from a terminal (`.\DDCL.exe`/`start DDCL.exe`)  
 
@@ -278,13 +273,14 @@ Example of the initial status write:
 
 ```csv
 timestamp,kind,value,info
-27.04.2026-11:34:26,registered_detections,internet_connectivity;ethernet;dns_resolution;vpn_connection;drive_availability;unc_availability,initial_status
-27.04.2026-11:34:26,internet_connectivity,online
-27.04.2026-11:34:26,ethernet,Ethernet 16;exampledomain.net,dns_suffix_changed;(N/A:exampledomain.net)
-27.04.2026-11:34:26,dns_resolution,1.1.1.1:sys_dns;True 1.1.1.1:ns1.altibox.net;True www.wikipedia.org:sys_dns;False www.wikipedia.org:ns1.altibox.net;True
-27.04.2026-11:34:26,vpn_connection,not_connected l_ip:N/A
-27.04.2026-11:34:26,drive_availability,available,C
-27.04.2026-11:34:26,unc_availability,available,\\path\going\somewhere
+03.09.2026-08:50:47,registered_detections,internet_connectivity;ethernet;dns_resolution;vpn_connection;drive_availability;unc_availability,initial_status
+03.09.2026-08:50:47,internet_connectivity,online
+03.09.2026-08:50:47,ethernet,GUID:{DEADBEEF-...};FriendlyName:'Ethernet 16';Description:'Realtek USB GbE Family Controller #8';DNSSuffix:example.domain;MAC:'DE:AD:BE:EF:DE:AD';PrimaryDHCPv4:1.1.1.1;PrimaryDNS:1.1.1.1;PrimaryGateway:N/A,
+03.09.2026-08:50:47,wlan,no_connection,
+03.09.2026-08:50:47,dns_resolution,1.1.1.1:sys_dns;True 1.1.1.1:ns1.somewhere.com;True www.wikipedia.org:sys_dns;False www.wikipedia.org:ns1.somewhere.com;True
+03.09.2026-08:50:47,vpn_connection,not_connected,
+03.09.2026-08:50:47,drive_availability,available,C:home
+03.09.2026-08:50:47,unc_availability,available,\\path\going\somewhere:
 ```
 
 ### Commandline options for DDCL.exe  
@@ -293,6 +289,9 @@ timestamp,kind,value,info
    Print a help message, sleep for 20 seconds, then exit.
 - -c, --config  
    Print the current configuration to the console and exit.   
+  -t --times:\<count>  
+      Run detection loop \<count> times. Defaults to 0.  
+      If \<count> is not given correctly, assumes 1.  
 
 The help message is roughly as follows:  
 
@@ -305,6 +304,9 @@ The help message is roughly as follows:
       Display this help message
   -c --config
       Display a configuration summary
+  -t --times:<count>
+      Run detection loop <count> times. Defaults to 0.
+      If <count> is not given correctly, assumes 1.
 
 DDCL is a tool for surveying network and storage status changes.
 Checks are performed once every second and logged to a location given through a fallback chain.
@@ -320,18 +322,20 @@ The configuration summary looks something like this:
 === Disk Drive Connection Logger (DDCL) v{version number} - Startup Summary ===
 Commandline arguments: --config
 Enabled Detections:
-  Internet Connectivity, Ethernet, DNS Resolution, VPN Connection, Drive Availability, UNC Availability, 
-Log Path: C:\some\path\DDCL-Logs\DDCL_log-<timestamp>.csv
+  Internet Connectivity, Ethernet, WLAN, DNS Resolution, VPN Connection, Drive Availability, UNC Availability,
+Log Path: C:\some\path\DDCL-Logs\
 Virtual Terminal Processing: Requested, Status: ON
 
 Network:
   Check Host: 1.1.1.1
-  DNS Server: ns1.altibox.net
+  DNS Server: ns1.somewhere.com
   Expected Domain Suffix: domain.org
   Expected VPN Hostname: .?hummina\.hummina.?
 
 Disks:
   Local Drives: C
   UNC paths:
+    \\localhost\C
     \\somewhere\else
+
 ```
