@@ -2220,11 +2220,12 @@ int main(int argc, char* argv[]) {
 			for (int st = 0; st < curr_drives.size(); st++) {
 				linecount++;
 				bool status = curr_drives[st];
-				std::cout << (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED))
-				<< "  " << std::setw(static_cast<int>(max_width_locals)) << std::left \
-				<< (disks.locals_labels[st].size() != 0 ? disks.locals_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
-					(disks.locals_imp[st] == 0 ? YELLOW : RED)) + disks.locals[st] : disks.locals[st] ) + ":\\" \
-				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
+				size_t visible_width = disks.locals[st].size() + disks.locals_labels[st].size() + 2 + (disks.locals_labels[st].size() != 0 ? 3 : 0);
+				std::cout << (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED)) << "  "
+					<< (disks.locals_labels[st].size() != 0 ? disks.locals_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
+						(disks.locals_imp[st] == 0 ? YELLOW : RED)) + disks.locals[st] : disks.locals[st] ) + ":\\" \
+					<< std::string(max_width_locals > visible_width ? max_width_locals - visible_width : 0, ' ')
+					<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
 			// and unc paths
 			std::cout << "\n" << BOLD << "UNC:" << RESET << std::endl;
@@ -2239,12 +2240,14 @@ int main(int argc, char* argv[]) {
 			for (int st = 0; st < curr_unc.size(); st++) {
 				linecount++;
 				bool status = curr_unc[st];
-				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED))
-				<< "  " << std::setw(static_cast<int>(max_width_unc)) << std::left \
-				<< (disks.unc_labels[st].size() != 0 ? disks.unc_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
-					(disks.unc_imp[st] == 0 ? YELLOW : RED)) + disks.unc[st] : disks.unc[st] ) \
-				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
+				size_t visible_width = disks.unc[st].size() + disks.unc_labels[st].size() + (disks.unc_labels[st].size() != 0 ? 3 : 0);
+				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED)) << "  "
+					<< (disks.unc_labels[st].size() != 0 ? disks.unc_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
+						(disks.unc_imp[st] == 0 ? YELLOW : RED)) + disks.unc[st] : disks.unc[st] )
+					<< std::string(max_width_unc > visible_width ? max_width_unc - visible_width : 0, ' ')
+					<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
+
 			// extra info (meta)
 			std::cout << std::endl << BOLD << MAGENTA << "Monitoring..." << RESET << std::endl;
 			std::cout << BLUE << "Log path: " << log_path.string().c_str() << RESET << std::endl << std::endl;
