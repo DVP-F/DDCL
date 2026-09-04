@@ -7,52 +7,53 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
-#include <cstddef>
+//* standard cpp lib
 #include <atomic>
 #include <algorithm>
-#include <chrono>
 #include <cctype>
-#include <memory>
-#include <mutex>
-// #include <limits>
-#include <cstring>
+#include <chrono>
+#include <cstddef>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <locale>
+#include <memory>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <userenv.h>
 #include <thread>
-#include "toml.hpp" // https://github.com/marzer/tomlplusplus/blob/v3.4.0/toml.hpp - Copyright (c) Mark Gillard <mark.gillard@outlook.com.au>
 #include <vector>
-#include <future>
+//* windows api
+// sensitive to ordering. do not change if at all possible
+#include <userenv.h>
+#pragma comment(lib, "user32.lib")
 #include <wlanapi.h>
+#pragma comment(lib, "wlanapi.lib")
 #include <objbase.h>
+#pragma comment(lib, "ole32.lib")
 #include <wtsapi32.h>
-#include <optional>
+#pragma comment(lib, "Wtsapi32.lib")
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
 #include <windows.h>
 #include <wininet.h>
+#pragma comment(lib, "wininet.lib")
 #include <iphlpapi.h>
+#pragma comment(lib, "iphlpapi.lib")
 #include <ras.h>
+#pragma comment(lib, "rasapi32.lib")
 #include <regex>
 #include <windns.h>
-#include <stdexcept>
-
-
-#pragma comment(lib, "user32.lib")
-#pragma comment(lib, "wlanapi.lib")
-#pragma comment(lib, "ole32.lib")
-#pragma comment(lib, "Wtsapi32.lib")
 #pragma comment(lib, "dnsapi.lib")
-#pragma comment(lib, "rasapi32.lib")
-#pragma comment(lib, "iphlpapi.lib")
-#pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "wininet.lib")
+#include <stdexcept>
+//* toml parser
+#include "toml.hpp" // https://github.com/marzer/tomlplusplus/blob/v3.4.0/toml.hpp - Copyright (c) Mark Gillard <mark.gillard@outlook.com.au>
 
 using namespace std;
 
@@ -85,11 +86,8 @@ using namespace std;
 #define NOWRAP  "\x1B[?7l"
 #define WRAP    "\x1B[?7h"
 
-static bool show_config = false;
-static bool show_help = false;
-static bool set_maxRuns = false;
-
-#define VERSION "0.2.0"
+// version macro for display
+#define DDCL_VERSION_NUMBER "0.2.0"
 
 // toml config default
 constexpr const char* DEFAULT_CONF = R"(
@@ -735,12 +733,6 @@ static inline bool cstr_equal(const char* a, const char* b) {
 	return std::strcmp(a, b) == 0;      // compare contents
 }
 
-// Global initalized string storage used by log_change
-struct Store {
-	std::vector<std::string> strings;
-};
-Store storage;
-
 // status vars
 NetworkInfo prev_EthernetInfo;
 NetworkInfo prev_WLANInfo;
@@ -1116,10 +1108,12 @@ static std::vector<status_change_type> detection_kinds;
 // beginning with casting macros for logging
 #define _SIZE_T__VOIDP(idx) reinterpret_cast<void*>(static_cast<std::uintptr_t>(idx)) // converting via a pointer-size uint for type safety. idx should be size_t, in my case a 64-bit.
 #define _VOIDP__SIZE_T(ptr) static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(ptr)) // safer mirrored cast back to size_t via uintptr_t for pointer-size uint
-#define _VOIDP__STRING(ptr) reinterpret_cast<std::string*>(ptr) // casting string directly would throw so we assume we good and that only a string pointer is passed
-//#define _STRING__VOIDP(strp) reinterpret_cast<void*>(strp)
 #define _STRING__CHAR(strp) ((strp)->empty() ? '?' : static_cast<char>((*strp)[0])) // explicit cast bc fuck the compiler
 //const char sss = _STRING__CHAR(&"haha"); // <const char>('h')
+
+//* for documentation puprposes these macros will be left here but commented out
+// #define _VOIDP__STRING(ptr) reinterpret_cast<std::string*>(ptr) // casting string directly would throw so we assume we good and that only a string pointer is passed
+// #define _STRING__VOIDP(strp) reinterpret_cast<void*>(strp)
 
 static std::string get_safe_filename_timestamp() {
 	auto ts = get_timestamp();
@@ -1226,7 +1220,6 @@ static void log_change(const status_change_type diff, std::string time, void* in
 	// called with type of change, timestamp, and optional info (used for drive letter, UNC path, etc.) specific to the change type
 
 	// Expectation: when `info` is provided for textual info it points to a `std::string`.
-	// We make an internal copy into `storage.strings`
 	void* info_copy = info;
 
 	// only init one oss per call
@@ -1243,85 +1236,67 @@ static void log_change(const status_change_type diff, std::string time, void* in
 		}
 
 		case status_change_type::ethernet: {
-			if (info_copy == nullptr || !info_copy) {
-				// nothing passed, ethernet info change
-				// safely assume non-empty strings
-				const char* friendly = curr_EthernetInfo.FName.c_str();
-				const char* c_suffix = curr_EthernetInfo.DNSSuffix.c_str();
-				const char* p_suffix = prev_EthernetInfo.DNSSuffix.c_str();
-				const char* c_guid = curr_EthernetInfo.GUID.c_str();
-				const char* p_guid = prev_EthernetInfo.GUID.c_str();
-				const char* c_mac = curr_EthernetInfo.MAC.c_str();
-				const char* p_mac = prev_EthernetInfo.MAC.c_str();
-				const char* c_dhcp = curr_EthernetInfo.PrimaryDHCPv4.c_str();
-				const char* p_dhcp = prev_EthernetInfo.PrimaryDHCPv4.c_str();
-				const char* c_dns = curr_EthernetInfo.PrimaryDNS.c_str();
-				const char* p_dns = prev_EthernetInfo.PrimaryDNS.c_str();
-				const char* c_gateway = curr_EthernetInfo.PrimaryGateway.c_str();
-				const char* p_gateway = prev_EthernetInfo.PrimaryGateway.c_str();
-				if (firstRun) {
-					// eight used fields for ethernet info
-					oss << time << ",ethernet," ;
-					if (curr_EthernetInfo.GUID != "N/A") {
-						oss << "GUID:" << c_guid << ";" \
-						<< "FriendlyName:'" << friendly << "';" \
-						<< "Description:'" << curr_EthernetInfo.Description << "';" \
-						<< "DNSSuffix:" << c_suffix << ";" \
-						<< "MAC:'" << c_mac << "';" \
-						<< "PrimaryDHCPv4:" << c_dhcp << ";" \
-						<< "PrimaryDNS:" << c_dns << ";" \
-						<< "PrimaryGateway:" << c_gateway << "," ;
-					} else {
-						oss << "no_connection," ;
-					}
-					write_to_log(oss.str());
-					break; // stop processing since its first run
+			// safely assume non-empty strings
+			const char* friendly = curr_EthernetInfo.FName.c_str();
+			const char* c_suffix = curr_EthernetInfo.DNSSuffix.c_str();
+			const char* p_suffix = prev_EthernetInfo.DNSSuffix.c_str();
+			const char* c_guid = curr_EthernetInfo.GUID.c_str();
+			const char* p_guid = prev_EthernetInfo.GUID.c_str();
+			const char* c_mac = curr_EthernetInfo.MAC.c_str();
+			const char* p_mac = prev_EthernetInfo.MAC.c_str();
+			const char* c_dhcp = curr_EthernetInfo.PrimaryDHCPv4.c_str();
+			const char* p_dhcp = prev_EthernetInfo.PrimaryDHCPv4.c_str();
+			const char* c_dns = curr_EthernetInfo.PrimaryDNS.c_str();
+			const char* p_dns = prev_EthernetInfo.PrimaryDNS.c_str();
+			const char* c_gateway = curr_EthernetInfo.PrimaryGateway.c_str();
+			const char* p_gateway = prev_EthernetInfo.PrimaryGateway.c_str();
+			if (firstRun) {
+				// eight used fields for ethernet info
+				oss << time << ",ethernet," ;
+				if (curr_EthernetInfo.GUID != "N/A") {
+					oss << "GUID:" << c_guid << ";" \
+					<< "FriendlyName:'" << friendly << "';" \
+					<< "Description:'" << curr_EthernetInfo.Description << "';" \
+					<< "DNSSuffix:" << c_suffix << ";" \
+					<< "MAC:'" << c_mac << "';" \
+					<< "PrimaryDHCPv4:" << c_dhcp << ";" \
+					<< "PrimaryDNS:" << c_dns << ";" \
+					<< "PrimaryGateway:" << c_gateway << "," ;
 				} else {
-					oss << time << ",ethernet," << friendly << ";" << c_suffix << ",";
+					oss << "no_connection," ;
 				}
-				if (c_guid != p_guid || c_mac != p_mac) {
-					// adapter changed
-					//* log changed guid, fname, desc., mac
-					oss << "adapter_change;(['" \
-					// previous info
-					<< prev_EthernetInfo.FName << "';" << p_guid << ";" << p_mac << ";" << prev_EthernetInfo.Description \
-					// new info
-					<< "]:['" << friendly << "';" << c_guid << ";" << c_mac << ";" << curr_EthernetInfo.Description << "])";
-				} else if ( c_suffix != p_suffix) {
-					// dns suffix
-					oss << "dns_suffix_change;(" << p_suffix << ":" << c_suffix << ")";
-				} else if (c_dhcp != p_dhcp) {
-					// changed dhcp server
-					oss << "dhcp_server_change;(" << p_dhcp << ":" << c_dhcp << ")";
-				} else if (c_dns != p_dns) {
-					// changed dns server
-					oss << "dns_server_change;(" << p_dns << ":" << c_dns << ")";
-				} else if (c_gateway != p_gateway) {
-					// changed gateway for some reason
-					oss << "gateway_change;(" << p_gateway << ":" << c_gateway << ")";
-				} else {
-					// generic unknown change
-					oss << "unknow_change;possible:[connection_status]";
-				}
-				oss << ",";
 				write_to_log(oss.str());
+				break; // stop processing since its first run
+			} else {
+				oss << time << ",ethernet," << friendly << ";" << c_suffix << ",";
 			}
-			else {
-				const std::string* incoming = _VOIDP__STRING(info_copy);
-				// a string is passed through info field - log it with current info
-				if (incoming) {
-					storage.strings.push_back(*incoming); // borrow some global memory
-					const char* friendly = curr_EthernetInfo.FName.empty() ? curr_EthernetInfo.FName.c_str() : "N/A";
-					const char* c_suffix = curr_EthernetInfo.DNSSuffix.empty() ? curr_EthernetInfo.DNSSuffix.c_str() : "N/A";
-					oss << time << ",ethernet," << friendly << ";" << c_suffix << "," << storage.strings.back();
-					write_to_log(oss.str());
-				}
-				else {
-					// failed to fetch string
-					oss << time << ",ethernet,UNKNOWN,info_unavailable";
-					write_to_log(oss.str());
-				}
+			if (c_guid != p_guid || c_mac != p_mac) {
+				// adapter changed
+				//* log changed guid, fname, desc., mac
+				oss << "adapter_change;(['" \
+				// previous info
+				<< prev_EthernetInfo.FName << "';" << p_guid << ";" << p_mac << ";" << prev_EthernetInfo.Description \
+				// new info
+				<< "]:['" << friendly << "';" << c_guid << ";" << c_mac << ";" << curr_EthernetInfo.Description << "])";
+			} else if ( c_suffix != p_suffix) {
+				// dns suffix
+				oss << "dns_suffix_change;(" << p_suffix << ":" << c_suffix << ")";
+			} else if (c_dhcp != p_dhcp) {
+				// changed dhcp server
+				oss << "dhcp_server_change;(" << p_dhcp << ":" << c_dhcp << ")";
+			} else if (c_dns != p_dns) {
+				// changed dns server
+				oss << "dns_server_change;(" << p_dns << ":" << c_dns << ")";
+			} else if (c_gateway != p_gateway) {
+				// changed gateway for some reason
+				oss << "gateway_change;(" << p_gateway << ":" << c_gateway << ")";
+			} else {
+				// generic unknown change
+				oss << "unknow_change;possible:[connection_status]";
 			}
+			oss << ",";
+			write_to_log(oss.str());
+			// never called with an info string, ignore it.
 			break;
 		}
 
@@ -1907,7 +1882,7 @@ static void initialize_runtime() {
 
 static void print_help_text(char* calltext) {
 	// This handles the -h --help option. Self descriptive, really.
-	std::cout << BOLD BLUE << "=== DDCL v" << VERSION << " ===" << std::endl << std::endl;
+	std::cout << BOLD BLUE << "=== DDCL v" << DDCL_VERSION_NUMBER << " ===" << std::endl << std::endl;
 	std::cout << RESET GREEN << calltext << " [-h|--help] [-c|--config]" << std::endl << std::endl;
 	std::cout << "  -h --help" << std::endl;
 	std::cout << "      Display this help message" << std::endl;
@@ -1924,7 +1899,7 @@ static void print_help_text(char* calltext) {
 
 static void print_config_summary(char* choice) {
 	// This handles the -c --config option. Just prints the effective configuration after parsing conf.toml
-	std::cout << BOLD BLUE << "=== Disk Drive Connection Logger (DDCL) v" << VERSION << " - Startup Summary===\n" << RESET;
+	std::cout << BOLD BLUE << "=== Disk Drive Connection Logger (DDCL) v" << DDCL_VERSION_NUMBER << " - Startup Summary===\n" << RESET;
 	std::cout << "Commandline arguments: " << BOLD << choice;
 	std::cout << "\nEnabled Detections:\n  " << RESET GREEN;
 	for (const auto& kind : detection_kinds) {
@@ -2051,12 +2026,17 @@ int main(int argc, char* argv[]) {
 	if (argc == 2) { // 2 arguments since arg 0 is the binary call
 		auto arg_strv = std::string_view(argv[1]);
 		if (arg_strv == "-h" || arg_strv == "--help") {
-			show_help = true;
+			// display help text
+			print_help_text(argv[0]);
+			return(0);
 		}
 		else if (arg_strv == "-c" || arg_strv == "--config") {
-			show_config = true;
+			// display config summary text
+			print_config_summary(argv[1]);
+			return(0);
 		}
 		else {
+			// set maxRuns
 			size_t count = 0;
 			// cpp17 version. avoids cpp20-exclusive starts_with and MSVC _Starts_with
 			constexpr std::string_view short_opt = "-t:";
@@ -2077,15 +2057,6 @@ int main(int argc, char* argv[]) {
 			}
 			maxRuns = (uint64_t)count;
 		}
-	}
-
-	if (show_help) {
-		print_help_text(argv[0]);
-		return(0);
-	}
-	if (show_config) {
-		print_config_summary(argv[1]);
-		return(0);
 	}
 
 	// Ensure the beginning status is written to the log, exit on failure (since if this fails, logging will fail silently)
@@ -2287,6 +2258,6 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 	WSACleanup();
-		std::cout << WRAP; std::cout.flush();
+	std::cout << WRAP; std::cout.flush();
 	return 0;
 }
