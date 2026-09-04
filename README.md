@@ -18,7 +18,7 @@ It's also one of __very__ few C++ application in my career, so dont mind the bad
     - [Other](#other-files)  
   - [How To](#how-to-use)  
     - [Installation Packages](#installation-packages)  
-      - [Compilation](#compilation)  
+      - [Version Requirements](#version-requirements)  
       - [Recommended Environment](#recommended-environment)  
       - [Requirements for Installation](#requirements-for-installation)  
     - [Archive Sets](#archive-sets)  
@@ -67,25 +67,33 @@ Assuming default names.
   - The actual logging binary, the interface for monitoring.
   - Compiled from `DDCL.cpp`
 - installer.exe
-  - This registers the runner binary `DDCL.exe`, registry keys, and %PATH% for ease of 
+  - This registers the registry keys, and modifies %PATH% for ease of use.  
+- uninstaller.exe
+  - This removes the registry keys and %PATH% modification.  
 - DDCL-Setup.msi
   - An installer package. This copies over the necessary files (including a customized `conf.toml`)  
     and then executes `installer.exe`.
-  - Compiled from `DDCL.exe`, `installer.exe`, `conf.toml`, and temporary files.
+  - Contains the other binaries, licenses, `conf.toml`, and `NOTICE.txt`
 
 ### Scripts and source code  
 
-- [./source/app/](./source/app/)
-  - [DDCL.cpp](./source/app/DDCL.cpp)
-    - The main source, the actuall UI and logger.
-  - [toml.hpp](./source/app/toml.hpp)
-    - The C++17 TOML parsing library used by DDCL.
-- [./compile/](./compile/)
-  - [compile_package.bat](./compile/compile_package.bat)
-    - This is the primary compilation script, which handles python scripts and the runner,  
-      as well as MSI packaging.
-  - [compile.sh](./compile/compile.sh)
-    - Compilation script for DDCL.exe when cross-compiling from Linux
+- [./source/](./source/)  
+  - [app/](./source/app/)  
+    - [DDCL.cpp](./source/app/DDCL.cpp)  
+      - The main source, the actual UI and logger.  
+    - [toml.hpp](./source/app/toml.hpp)  
+      - The C++17 TOML parsing library used by DDCL.  
+  - [installer/](./source/installer/)  
+    - [src/main.zig](./source/installer/src/main.zig)  
+      - The installer's main source code.  
+  - [uninstaller/](./source/uninstaller/)  
+    - [src/main.zig](./source/uninstaller/src/main.zig)  
+      - The uninstaller's main source code.  
+- [./compile/](./compile/)  
+  - [compile_package.bat](./compile/compile_package.bat)  
+    - This is the primary compilation script, which handles compiling the binaries and creating zip archives.  
+  - [compile.sh](./compile/compile.sh)  
+    - Compilation script for DDCL.exe when cross-compiling from Linux.  
 
 ### [Licenses](./LICENSES/)  
 
@@ -119,6 +127,7 @@ Assuming default names.
   - Configuration file for Wine when cross-compiling from Linux
 - [./compile/.clangd](./compile/.clangd)
   - Configuration file for CLang when cross-compiling from Linux
+  A copy of this exists at [./source/app/.clangd](./source/app/.clangd)  
 
 ## How to use  
 
@@ -126,27 +135,29 @@ Assuming default names.
 
 You can use a precompiled package from the repository or compile from source.  
 Compiling from source is easiest done with a modified `compile/compile_package.bat`  
-This will give you the executables for the runner, installer, and a `.msi` package installer.  
 
 If you do wanna compile with commands manually, all the info you need should be in the same file.  
 
 If compiling from source, prior to compilation, remember to:  
 
-- modify the `source/conf.toml` TOML configuration file as it's copied wholesale into the MSI  
+- modify the `source/conf.toml` TOML configuration file as it's copied wholesale  
 - edit the environment variables at the top of `compile/compile_package.bat` to match your use.
 
-#### Compilation  
+The equivalent actions ought to be applicable to `compile/compile.sh`
+
+#### Version requirements  
 
 Minimum recommended is lowest tested version.  
 Minimum version is lowest version with known compatible syntax.  
+Required version is the only applicable version.  
 
 - MSVC CLang (minimum recommended: MSVC 14.44.35207)
 - MSVC Linker (minimum recommended: MSVC 14.44.35207)
 - MS Resource Compiler (minimum recommended: Windows Kits for 10.0.26100.0)
 - WiX CLI Tools (minimum version: 4.0)
-- Zig v0.15.2
+- Zig (required version: 0.15.2)
 
-#### Recommended environment  
+Recommended environment:  
 
 - MS Visual Studio 2022 CE with C++ workload
 - WiX CLI Tools 7.0
@@ -160,7 +171,7 @@ Local administrator access
 ### Archive sets
 
 These are the .zip archives made by `compile/compile_package.bat`  
-These are generated under `dist/`  
+These are generated under [./dist/](./dist/)  
 
 Each additionally contains License and Copyright notices by way of these files:  
 
@@ -168,9 +179,9 @@ Each additionally contains License and Copyright notices by way of these files:
 - [./LICENSES/LICENSE.mit](./LICENSES/LICENSE.mit)  
 - [./NOTICE.txt](./NOTICE.txt)  
 
-__NOTE!__ The binaries are NOT static-linked and are therefore by default __NOT portable__!  
+__NOTE!__ The binaries are NOT statically linked and are therefore by default __NOT portable__!  
 They depend on the host machine to supply any otherwise missing libraries!  
-This includes the 'Standalone'  
+This includes the 'Standalone' package.  
 
 #### Full set (`DDCL_full.zip`)  
 
@@ -204,21 +215,21 @@ Contains the following:
 2. Move the `DDCL.exe` binary to the desired location.
 3. Run it once to generate the default configuration file (config.toml) in the same directory.
 4. Edit the config file with what disks to check for, IP address to check connection to,  
-   UNC (SMB, etc.) paths to verify, DNS ovverride, expected DNS suffix, and more.
+   UNC (SMB shares, etc.) paths to verify, DNS ovverride, expected DNS suffix, and more.
 5. Run it again to start logging!
 
 ### Full install
 
 1. Get an installation package
 2. Choose one of two paths - Manual managed install or MSI install.  
-   
+
    For Manual install:  
-   
+
    1. Move the executables to the desired location.  
-   2. Run `DDCL.exe` once to generate the default configuration file (config.toml) in the same directory.  
+   2. Run `DDCL.exe` once to generate the default configuration file `conf.toml` in the same directory.  
    3. Edit the config file with what disks to check for, IP address to check connection to,  
       UNC (SMB, etc.) paths to verify, DNS ovverride, expected DNS suffix, and more.
-   4. Run `installer.exe` to register the app in the start menu and PATH.  
+   4. Run `installer.exe` to register the app in the start menu, %PATH%, and registry.  
 
    For MSI install:  
 
@@ -257,6 +268,7 @@ Logs are written to one of the following locations, in the same prioritization
 
 '\<timestamp>' is the time of launching the application, formatted as `%d.%m.%Y-%H_%M_%S`.  
 '{log_path}' is the path configured in `conf.toml`, if available.  
+'&EXE_DIR&' is the resolved directory in which the `DDCL.exe` binary lies. This is written to the registry key `HKLM\SOFTWARE\DDCL` as `InstallPath`.  
 
 The log contains only the CHANGES in status and the initial state, with a timestamp and any other relevant information.
 

@@ -1117,7 +1117,7 @@ static std::vector<status_change_type> detection_kinds;
 #define _SIZE_T__VOIDP(idx) reinterpret_cast<void*>(static_cast<std::uintptr_t>(idx)) // converting via a pointer-size uint for type safety. idx should be size_t, in my case a 64-bit.
 #define _VOIDP__SIZE_T(ptr) static_cast<std::size_t>(reinterpret_cast<std::uintptr_t>(ptr)) // safer mirrored cast back to size_t via uintptr_t for pointer-size uint
 #define _VOIDP__STRING(ptr) reinterpret_cast<std::string*>(ptr) // casting string directly would throw so we assume we good and that only a string pointer is passed
-#define _STRING__VOIDP(strp) reinterpret_cast<void*>(strp)
+//#define _STRING__VOIDP(strp) reinterpret_cast<void*>(strp)
 #define _STRING__CHAR(strp) ((strp)->empty() ? '?' : static_cast<char>((*strp)[0])) // explicit cast bc fuck the compiler
 //const char sss = _STRING__CHAR(&"haha"); // <const char>('h')
 
