@@ -1326,91 +1326,82 @@ static void log_change(const status_change_type diff, std::string time, void* in
 		}
 
 		case status_change_type::wlan: {
-			if (info_copy == nullptr || !info_copy) {
-				// nothing passed, wlan info change
+			// info_copy is never passed for wlan so we ignore it
+			oss << time << ",wlan,";
+			// first write current status
+			if (curr_WLANInfo.GUID != "N/A") {
 				// safely assume non-empty strings
-				const char* friendly = curr_WLANInfo.FName.c_str();
-				const char* c_suffix = curr_WLANInfo.DNSSuffix.c_str();
-				const char* p_suffix = prev_WLANInfo.DNSSuffix.c_str();
-				const char* c_guid = curr_WLANInfo.GUID.c_str();
-				const char* p_guid = prev_WLANInfo.GUID.c_str();
-				const char* c_mac = curr_WLANInfo.MAC.c_str();
-				const char* p_mac = prev_WLANInfo.MAC.c_str();
-				const char* c_dhcp = curr_WLANInfo.PrimaryDHCPv4.c_str();
-				const char* p_dhcp = prev_WLANInfo.PrimaryDHCPv4.c_str();
-				const char* c_dns = curr_WLANInfo.PrimaryDNS.c_str();
-				const char* p_dns = prev_WLANInfo.PrimaryDNS.c_str();
-				const char* c_gateway = curr_WLANInfo.PrimaryGateway.c_str();
-				const char* p_gateway = prev_WLANInfo.PrimaryGateway.c_str();
-				if (firstRun) {
-					// every field is used for wlan
-					oss << time << ",wlan,";
-					if (curr_WLANInfo.GUID != "N/A") {
-						oss << "GUID:" << c_guid << ";" \
-						<< "FriendlyName:'" << friendly << "';" \
-						<< "Description:'" << curr_WLANInfo.Description << "';" \
-						<< "DNSSuffix:" << c_suffix << ";" \
-						<< "SSID:'" << curr_WLANInfo.WSSID << "';" \
-						<< "Name:'" << curr_WLANInfo.WName << "';" \
-						<< "BSSID:" << curr_WLANInfo.WBSSID << ";" \
-						<< "SignalQuality:" << curr_WLANInfo.WSignalQuality << ";" \
-						<< "AuthAlgo:" << curr_WLANInfo.WAuthAlgo << ";" \
-						<< "CipherAlgo:" << curr_WLANInfo.WCipherAlgo << ";" \
-						<< "MAC:'" << c_mac << "';" \
-						<< "PrimaryDHCPv4:" << c_dhcp << ";" \
-						<< "PrimaryDNS:" << c_dns << ";" \
-						<< "PrimaryGateway:" << c_gateway << "," ;
-					} else {
-						oss << "no_connection," ;
-					}
-					write_to_log(oss.str());
-					break; // stop processing since its first run
-				} else {
-					oss << time << ",wlan," << friendly << ";" << c_suffix << ",";
-				}
-				if (c_guid != p_guid || c_mac != p_mac) {
-					// adapter changed
-					//* log changed guid, fname, desc., mac
-					oss << "adapter_change;(['" \
-					// previous info
-					<< prev_WLANInfo.FName << "';" << p_guid << ";" << p_mac << ";" << prev_WLANInfo.Description \
-					// new info
-					<< "]:['" << friendly << "';" << c_guid << ";" << c_mac << ";" << curr_WLANInfo.Description << "])";
-				} else if ( c_suffix != p_suffix) {
-					// dns suffix
-					oss << "dns_suffix_change;(" << p_suffix << ":" << c_suffix << ")";
-				} else if (c_dhcp != p_dhcp) {
-					// changed dhcp server
-					oss << "dhcp_server_change;(" << p_dhcp << ":" << c_dhcp << ")";
-				} else if (c_dns != p_dns) {
-					// changed dns server
-					oss << "dns_server_change;(" << p_dns << ":" << c_dns << ")";
-				} else if (c_gateway != p_gateway) {
-					// changed gateway for some reason
-					oss << "gateway_change;(" << p_gateway << ":" << c_gateway << ")";
-				} else {
-					// generic unknown change
-					oss << "unknow_change;possible:[connection_status]";
-				}
-				oss << ",";
-				write_to_log(oss.str());
+				oss << "[GUID:" << curr_WLANInfo.GUID << ";" \
+				<< "FName:'" << curr_WLANInfo.FName << "';" \
+				<< "Desc:'" << curr_WLANInfo.Description << "';" \
+				<< "Suffix:" << curr_WLANInfo.DNSSuffix << ";" \
+				<< "SSID:'" << curr_WLANInfo.WSSID << "';" \
+				<< "Name:'" << curr_WLANInfo.WName << "';" \
+				<< "BSSID:" << curr_WLANInfo.WBSSID << ";" \
+				<< "SigQual:" << curr_WLANInfo.WSignalQuality << ";" \
+				<< "Auth:" << curr_WLANInfo.WAuthAlgo << ";" \
+				<< "Cipher:" << curr_WLANInfo.WCipherAlgo << ";" \
+				<< "MAC:'" << curr_WLANInfo.MAC << "';" \
+				<< "*DHCPv4:" << curr_WLANInfo.PrimaryDHCPv4 << ";" \
+				<< "*DNS:" << curr_WLANInfo.PrimaryDNS << ";" \
+				<< "*Gate:" << curr_WLANInfo.PrimaryGateway << "]," ;
+			} else {
+				oss << "no_connection," ;
 			}
-			else {
-				const std::string* incoming = _VOIDP__STRING(info_copy);
-				// a string is passed through info field - log it with current info
-				if (incoming) {
-					storage.strings.push_back(*incoming); // borrow some global memory
-					const char* friendly = curr_WLANInfo.FName.empty() ? curr_WLANInfo.FName.c_str() : "N/A";
-					const char* c_suffix = curr_WLANInfo.DNSSuffix.empty() ? curr_WLANInfo.DNSSuffix.c_str() : "N/A";
-					oss << time << ",wlan," << friendly << ";" << c_suffix << "," << storage.strings.back();
-					write_to_log(oss.str());
+			// then write what changed
+			oss << "changed[";
+			// if connection status changed
+			if (curr_WLANInfo.GUID == "N/A" && prev_WLANInfo.GUID != "N/A") {
+				oss << "connection_status:disconnected]"; // disconnected
+			} else if (curr_WLANInfo.GUID != "N/A" && prev_WLANInfo.GUID == "N/A") {
+				oss << "connection_status:connected]"; // connected
+			} else {
+				if (curr_WLANInfo.GUID != prev_WLANInfo.GUID) {
+					oss << "GUID:(previous:" << prev_WLANInfo.GUID << ");"; // switched NIC
 				}
-				else {
-					// failed to fetch string
-					oss << time << ",wlan,UNKNOWN,info_unavailable";
-					write_to_log(oss.str());
+				if (curr_WLANInfo.FName != prev_WLANInfo.FName) {
+					oss << "FName:(previous:'" << prev_WLANInfo.FName << "');";
 				}
+				if (curr_WLANInfo.Description != prev_WLANInfo.Description) {
+					oss << "Desc:(previous:'" << prev_WLANInfo.Description << "');";
+				}
+				if (curr_WLANInfo.DNSSuffix != prev_WLANInfo.DNSSuffix) {
+					oss << "Suffix:(previous:" << prev_WLANInfo.DNSSuffix << ");";
+				}
+				if (curr_WLANInfo.WSSID != prev_WLANInfo.WSSID) {
+					oss << "SSID:(previous:'" << prev_WLANInfo.WSSID << "');"; // Switched network
+				}
+				if (curr_WLANInfo.WName != prev_WLANInfo.WName) {
+					oss << "Name:(previous:'" << prev_WLANInfo.WName << "');";
+				}
+				if (curr_WLANInfo.WBSSID != prev_WLANInfo.WBSSID) {
+					oss << "BSSID:(previous:" << prev_WLANInfo.WBSSID << ");"; // switched AP
+				}
+				if (curr_WLANInfo.WSignalQuality != prev_WLANInfo.WSignalQuality) {
+					oss << "SigQual:(previous:" << prev_WLANInfo.WSignalQuality << ");";
+				}
+				if (curr_WLANInfo.WAuthAlgo != prev_WLANInfo.WAuthAlgo) {
+					oss << "Auth:(previous:" << prev_WLANInfo.WAuthAlgo << ");";
+				}
+				if (curr_WLANInfo.WCipherAlgo != prev_WLANInfo.WCipherAlgo) {
+					oss << "Cipher:(previous:" << prev_WLANInfo.WCipherAlgo << ");";
+				}
+				if (curr_WLANInfo.MAC != prev_WLANInfo.MAC) {
+					oss << "MAC:(previous:'" << prev_WLANInfo.MAC << "');";
+				}
+				if (curr_WLANInfo.PrimaryDHCPv4 != prev_WLANInfo.PrimaryDHCPv4) {
+					oss << "*DHCPv4:(previous:" << prev_WLANInfo.PrimaryDHCPv4 << ");";
+				}
+				if (curr_WLANInfo.PrimaryDNS != prev_WLANInfo.PrimaryDNS) {
+					oss << "*DNS:(previous:" << prev_WLANInfo.PrimaryDNS << ");";
+				}
+				if (curr_WLANInfo.PrimaryGateway != prev_WLANInfo.PrimaryGateway) {
+					oss << "*Gate:(previous:" << prev_WLANInfo.PrimaryGateway << ");";
+				}
+				oss << "]";
 			}
+			// and write to log file
+			write_to_log(oss.str());
 			break;
 		}
 
