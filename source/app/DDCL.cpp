@@ -2191,8 +2191,7 @@ int main(int argc, char* argv[]) {
 			size_t max_width_locals_label = 0;
 
 			for (int st = 0; st < curr_drives.size(); ++st) {
-				std::string s_l = disks.locals_labels[st];
-				size_t new_size_label = s_l.size();
+				size_t new_size_label = disks.locals_labels[st].size();
 				if (new_size_label > max_width_locals_label) max_width_locals_label = new_size_label;
 			}
 
