@@ -124,13 +124,14 @@ expected_vpn_hostname = ""
 
 [Disks]
 # mounted disks with drive letters; Local direct-attached storage or SAN storage, not network shares.
+# avoid UI misalignment by only using single-width/UTF-8 characters
 # add labels by prefixing the drive letter with `<label>#`
 # modify the pound `#` to be `#!` to mark a disk as important
 locals = [
 	"home#!C",
 ]
 # unc paths are network resources to check eg. smb shares etc. (Including NAS storage) 
-# quad backslashes per single backslash in the final path due to parsing by C++ string literal and toml parser.
+# double backslashes per single backslash in the final path due to parsing by C++ string literal and toml parser.
 unc = [	
 	# add labels by prefixing the path with `<label>#`
 	# modify the pound `#` to be `#!` to mark as important
@@ -2077,6 +2078,7 @@ int main(int argc, char* argv[]) {
 			update_status();
 
 			// Just a wall of logic for the status dump
+
 			std::cout << CLEAR NOWRAP;
 			std::cout << BOLD << CYAN << "=== [" << get_timestamp() << "] Network & Drive Status ===\n" << RESET;
 			std::cout << BOLD << "Internet: " << RESET;
@@ -2088,6 +2090,7 @@ int main(int argc, char* argv[]) {
 			std::cout << "  " << BOLD << "www.wikipedia.org" << ":\n" RESET ;
 			std::cout << "    Local DNS: " << (curr_resolve_by_dns[2] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
 			std::cout << "    " << net.dns << ": " << (curr_resolve_by_dns[3] ? GREEN "RESOLVED" : RED "FAILED") << RESET << std::endl;
+
 			// ethernet connections if any
 			std::cout << BOLD << "Ethernet Adapter Info:" << RESET << std::endl;
 			linecount++;
@@ -2105,6 +2108,7 @@ int main(int argc, char* argv[]) {
 				std::cout << "  " << YELLOW << "No Ethernet connections detected!" << RESET << std::endl ;
 				linecount++;
 			}
+
 			// wifi connections if any
 			std::cout << BOLD << "WLAN Adapter Info:" << RESET << std::endl ;
 			linecount++;
@@ -2126,6 +2130,7 @@ int main(int argc, char* argv[]) {
 				std::cout << "  " << YELLOW << "Not connected!" << RESET << std::endl ;
 				linecount++;
 			}
+
 			// vpn if present
 			std::cout << BOLD << "VPN Info:" << RESET << std::endl ;
 			linecount++;
@@ -2148,9 +2153,10 @@ int main(int argc, char* argv[]) {
 				}
 			}
 			else {
-				std::cout << YELLOW "  No active VPN connection detected\n" RESET << std::endl ;
+				std::cout << YELLOW "  No active VPN connection detected!\n" RESET << std::endl ;
 				linecount++;
 			}
+
 			// session info
 			// first generate a timestamp
 			long long remaining = session.upTimeSec;
@@ -2178,45 +2184,65 @@ int main(int argc, char* argv[]) {
 			std::cout << "  " << BOLD << "Hostname:        " << RESET << session.hostname << std::endl;
 			std::cout << "  " << BOLD << "Uptime:          " << RESET << uptime_ts << std::endl;
 			linecount += 7;
+
 			// local drives
 			std::cout << "\n" << BOLD << "Drives:" << RESET << std::endl;
 			linecount++;
-			size_t max_width_locals = 0;
+			size_t max_width_locals_path = 0;
+			size_t max_width_locals_label = 0;
+
 			for (int st = 0; st < curr_drives.size(); ++st) {
 				std::string s = disks.locals[st];
 				std::string s_l = disks.locals_labels[st];
-				size_t new_size = s.size() + s_l.size() + 2 + (s_l.size() != 0 ? 3 : 0);
-				if (new_size > max_width_locals) max_width_locals = new_size;
+
+				size_t new_size_path = s.size();
+				if (new_size_path > max_width_locals_path) max_width_locals_path = new_size_path;
+
+				size_t new_size_label = s_l.size();
+				if (new_size_label > max_width_locals_label) max_width_locals_label = new_size_label;
 			}
+
 			for (int st = 0; st < curr_drives.size(); st++) {
 				linecount++;
 				bool status = curr_drives[st];
-				size_t visible_width = disks.locals[st].size() + disks.locals_labels[st].size() + 2 + (disks.locals_labels[st].size() != 0 ? 3 : 0);
-				std::cout << (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED)) << "  "
-					<< (disks.locals_labels[st].size() != 0 ? disks.locals_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
-						(disks.locals_imp[st] == 0 ? YELLOW : RED)) + disks.locals[st] : disks.locals[st] ) + ":\\" \
-					<< std::string(max_width_locals > visible_width ? max_width_locals - visible_width : 0, ' ')
-					<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
+
+				std::cout << (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED))
+				<< "  " << std::setw(static_cast<int>(max_width_locals_label)) << std::left
+				<< (disks.locals_labels[st].size() != 0 ? disks.locals_labels[st] : "") << RESET WHITE
+				<< (disks.locals_labels[st].size() != 0 ? " - " : "   ") << RESET
+				<< (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED))
+				<< std::setw(static_cast<int>(max_width_locals_path)) << std::left << disks.locals[st]
+				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
+
 			// and unc paths
 			std::cout << "\n" << BOLD << "UNC:" << RESET << std::endl;
 			linecount++;
-			size_t max_width_unc = 0;
+			size_t max_width_unc_path = 0;
+			size_t max_width_unc_label = 0;
+
 			for (int st = 0; st < curr_unc.size(); ++st) {
 				std::string s = disks.unc[st];
 				std::string s_l = disks.unc_labels[st];
-				size_t new_size = s.size() + s_l.size() + (s_l.size() != 0 ? 3 : 0);
-				if (new_size > max_width_unc) max_width_unc = new_size;
+
+				size_t new_size_path = s.size();
+				if (new_size_path > max_width_unc_path) max_width_unc_path = new_size_path;
+
+				size_t new_size_label = s_l.size();
+				if (new_size_label > max_width_unc_label) max_width_unc_label = new_size_label;
 			}
+
 			for (int st = 0; st < curr_unc.size(); st++) {
 				linecount++;
 				bool status = curr_unc[st];
-				size_t visible_width = disks.unc[st].size() + disks.unc_labels[st].size() + (disks.unc_labels[st].size() != 0 ? 3 : 0);
-				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED)) << "  "
-					<< (disks.unc_labels[st].size() != 0 ? disks.unc_labels[st] + RESET WHITE " - " RESET + (status ? GREEN : \
-						(disks.unc_imp[st] == 0 ? YELLOW : RED)) + disks.unc[st] : disks.unc[st] )
-					<< std::string(max_width_unc > visible_width ? max_width_unc - visible_width : 0, ' ')
-					<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
+
+				std::cout << (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED))
+				<< "  " << std::setw(static_cast<int>(max_width_unc_label)) << std::left
+				<< (disks.unc_labels[st].size() != 0 ? disks.unc_labels[st] : "") << RESET WHITE
+				<< (disks.unc_labels[st].size() != 0 ? " - " : "   ") << RESET
+				<< (status ? GREEN : (disks.unc_imp[st] == 0 ? YELLOW : RED))
+				<< std::setw(static_cast<int>(max_width_unc_path)) << std::left << disks.unc[st]
+				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
 
 			// extra info (meta)
@@ -2243,6 +2269,7 @@ int main(int argc, char* argv[]) {
 		std::cout << WRAP; std::cout.flush();
 		return 0;
 	}
+
 	// These should force a clean exit on exceptions
 	// Including closing the socket to avoid instability in the network stack on next run, since microslop code can be weird about that.
 	catch (const std::exception& ex) {
