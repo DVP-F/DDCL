@@ -2188,16 +2188,10 @@ int main(int argc, char* argv[]) {
 			// local drives
 			std::cout << "\n" << BOLD << "Drives:" << RESET << std::endl;
 			linecount++;
-			size_t max_width_locals_path = 0;
 			size_t max_width_locals_label = 0;
 
 			for (int st = 0; st < curr_drives.size(); ++st) {
-				std::string s = disks.locals[st];
 				std::string s_l = disks.locals_labels[st];
-
-				size_t new_size_path = s.size();
-				if (new_size_path > max_width_locals_path) max_width_locals_path = new_size_path;
-
 				size_t new_size_label = s_l.size();
 				if (new_size_label > max_width_locals_label) max_width_locals_label = new_size_label;
 			}
@@ -2210,8 +2204,7 @@ int main(int argc, char* argv[]) {
 				<< "  " << std::setw(static_cast<int>(max_width_locals_label)) << std::left
 				<< (disks.locals_labels[st].size() != 0 ? disks.locals_labels[st] : "") << RESET WHITE
 				<< (disks.locals_labels[st].size() != 0 ? " - " : "   ") << RESET
-				<< (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED))
-				<< std::setw(static_cast<int>(max_width_locals_path)) << std::left << disks.locals[st]
+				<< (status ? GREEN : (disks.locals_imp[st] == 0 ? YELLOW : RED)) << disks.locals[st] + ":\\"
 				<< BOLD WHITE << " : " << (status ? GREEN "OK" : RED "FAIL") << RESET << std::endl;
 			}
 
