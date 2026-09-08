@@ -4,9 +4,7 @@
 
 1. Human review and read-through of DDCL.cpp  
     -> See if it's fairly understandable (semantic logic)  
-2. Update scripts  
-   -> `compile.sh` - maybe `.clangd`  
-3. Testing  
+2. Testing  
     - DDCL.exe  
         -> Full use test  
         -> Hardware tests - stability  
@@ -15,7 +13,7 @@
         -> Usability, configurability, looking up the log files.  
         -> Registry key use  
         -> Commandline use  
-4. Prep for use in-prod  
+3. Prep for use in-prod  
     -> Update documentation and make techincal docs  
 
 ## Table and checklist  
@@ -23,7 +21,6 @@
 | Action                   | Information                                 | Done? |
 |:-------------------------|:--------------------------------------------|:-----:|
 | Human review of DDCL.cpp | Semantic logic                              |Delayed|
-| Update scripts           | Based on installer.py / compile_package.bat |       |
 | Testing DDCL.exe         | Full use test                               |       |
 | Hardware tests           | Stability                                   |       |
 | Pre-production use       | Viability in active consumer use            |       |
@@ -32,7 +29,6 @@
 | Pre-production use       | Commandline use                             |       |
 | Prep for use in-prod     | Update documentation                        |       |
 | Prep for use in-prod     | Technical docs                              |       |
-| Redo (un)install         | Update packaging scripts                    |  0.5  |
 
 ```plaintext
        ,
