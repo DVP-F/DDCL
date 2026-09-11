@@ -4,6 +4,8 @@ DDCL is a simple network and drive connection logger for scamdows designed to be
 It is written in C\++17 and uses the toml++ library for configuration management.  
 It's also one of __very__ few C++ application in my career, so dont mind the bad code lol.  
 
+___! This project is archived as i cant be bothered to work on it anymore, including compiling the latest version, 0.2.1___
+
 ## ToC  
 
 - [Header](#ddcl---diskdriveconnectionlogger)  
