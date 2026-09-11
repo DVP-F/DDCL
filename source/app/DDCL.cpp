@@ -87,7 +87,7 @@ using namespace std;
 #define WRAP    "\x1B[?7h"
 
 // version macro for display
-#define DDCL_VERSION_NUMBER "0.2.0"
+#define DDCL_VERSION_NUMBER "0.2.1"
 
 // toml config default
 constexpr const char* DEFAULT_CONF = R"(
@@ -1709,7 +1709,6 @@ static void initialize_runtime() {
 		if (!temp_l.empty()) { log_path = temp_l; }
 		use_vt = meta_tbl->operator[]("use_virtual_terminal").value_or(true);
 		detection_kinds.clear();
-		// TODO: This should test for presence of incorrect keys and emit a warn with correct keys.
 		// explicitly test presence and type (e.g. contains("detections") + as_array()), so you can warn on wrong types and implement the exact semantics you want.
 		// •	Use a presence check (e.g. contains("detections")) and then as_array() to distinguish:
 		/*•	not present → apply “absent” rule

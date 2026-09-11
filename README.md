@@ -19,7 +19,6 @@ It's also one of __very__ few C++ application in my career, so dont mind the bad
   - [How To](#how-to-use)  
     - [Installation Packages](#installation-packages)  
       - [Version Requirements](#version-requirements)  
-      - [Recommended Environment](#recommended-environment)  
       - [Requirements for Installation](#requirements-for-installation)  
     - [Archive Sets](#archive-sets)  
       - [Full](#full-set-ddcl_fullzip)  
